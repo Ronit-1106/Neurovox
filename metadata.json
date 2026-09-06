@@ -1,0 +1,6 @@
+{
+  "name": "Neurovox",
+  "description": "Neurovox web application imported from GitHub repository Ronit-1106/neurovox.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
