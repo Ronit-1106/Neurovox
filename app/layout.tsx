@@ -3,8 +3,11 @@ import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Neurovox',
-  description: 'Neurovox web application imported from GitHub repository Ronit-1106/neurovox.',
-  generator: 'v0.app',
+  description: 'AI-powered face scanning application for accurate mask sizing and custom fit recommendations.',
+  openGraph: {
+    title: 'Neurovox',
+    description: 'AI-powered face scanning application for accurate mask sizing and custom fit recommendations.',
+  },
   icons: {
     icon: [
       {

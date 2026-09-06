@@ -1,6 +1,8 @@
 {
   "name": "Neurovox",
-  "description": "Neurovox web application imported from GitHub repository Ronit-1106/neurovox.",
-  "requestFramePermissions": [],
+  "description": "AI-powered face scanning application for accurate mask sizing and custom fit recommendations.",
+  "requestFramePermissions": [
+    "camera"
+  ],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
