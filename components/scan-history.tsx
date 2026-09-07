@@ -530,7 +530,7 @@ export function ScanHistory({ onStartNewScan }: ScanHistoryProps) {
 
                   <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
                     <div className="text-right">
-                      <div className="text-base font-bold text-sage">${Number(order.totalAmount).toFixed(2)}</div>
+                      <div className="text-base font-bold text-sage">₹{Number(order.totalAmount).toLocaleString('en-IN')}</div>
                       <div className="text-[10px] text-cream/50 uppercase font-mono">{order.status || 'Confirmed'}</div>
                     </div>
                     <span className="p-1.5 rounded-lg bg-black/40 border border-white/10 text-cream/70" title="Cloud SQL verified">

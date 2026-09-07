@@ -363,8 +363,8 @@ export function FaceScanner({
                 if (ipdPx > 22) {
                   // Standard adult human IPD is 63 mm
                   const pxPerMm = ipdPx / 63;
-                  // Landmarks 234 to 454 measure zygomatic curve; full ear-to-ear mask strap span is ~1.08x
-                  const fullFaceSpanMm = (jawWidthPx * 1.08) / pxPerMm;
+                  // Landmarks 234 to 454 measure 2D projected zygomatic curve; true 3D lateral curvature span is ~1.18x
+                  const fullFaceSpanMm = (jawWidthPx * 1.18) / pxPerMm;
                   const faceHeightMm = faceHeightPx / pxPerMm;
 
                   const rawWidthCm = Number((fullFaceSpanMm / 10).toFixed(1));
@@ -794,36 +794,37 @@ export function FaceScanner({
   return (
     <div className="min-h-screen bg-olive-dark text-cream relative overflow-hidden flex flex-col font-sans select-none">
       {/* Top Header */}
-      <header className="absolute top-0 left-0 right-0 p-4 md:p-6 z-50 flex justify-between items-center max-w-7xl mx-auto w-full">
-        <div className="flex items-center gap-2 md:gap-3">
+      <header className="absolute top-0 left-0 right-0 p-3 sm:p-4 md:p-6 z-50 flex justify-between items-center max-w-7xl mx-auto w-full gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {onGoHome ? (
             <button
               type="button"
               id="scanner-btn-home"
               onClick={onGoHome}
-              className="flex items-center gap-2 text-cream/80 hover:text-cream transition-colors bg-black/30 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/10 hover:border-white/20 text-sm font-medium cursor-pointer"
+              className="flex items-center gap-1.5 text-cream/80 hover:text-cream transition-colors bg-black/30 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full border border-white/10 hover:border-white/20 text-xs sm:text-sm font-medium cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Home</span>
+              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Home</span>
             </button>
           ) : (
             <Link
               href="/"
               id="scanner-btn-home-link"
-              className="flex items-center gap-2 text-cream/80 hover:text-cream transition-colors bg-black/30 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/10 hover:border-white/20 text-sm font-medium cursor-pointer"
+              className="flex items-center gap-1.5 text-cream/80 hover:text-cream transition-colors bg-black/30 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full border border-white/10 hover:border-white/20 text-xs sm:text-sm font-medium cursor-pointer"
             >
-              <ArrowLeft className="w-4 h-4" />
-              <span>Home</span>
+              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span className="hidden xs:inline">Home</span>
             </Link>
           )}
 
-          <div className="flex items-center gap-2 font-bold text-base md:text-lg tracking-tight bg-black/30 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/10">
-            <ScanFace className="w-5 h-5 text-sage" />
-            <span>Neurovox Ai</span>
+          <div className="flex items-center gap-1.5 sm:gap-2 font-bold text-xs sm:text-base md:text-lg tracking-tight bg-black/30 backdrop-blur-md px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-full border border-white/10">
+            <ScanFace className="w-4 h-4 sm:w-5 sm:h-5 text-sage shrink-0" />
+            <span className="hidden sm:inline">Neurovox AI</span>
+            <span className="sm:hidden font-mono text-xs">NV</span>
           </div>
 
           {/* Quick Username indicator */}
-          <div className="hidden sm:flex items-center gap-1.5 bg-black/30 backdrop-blur-md px-3 py-2 rounded-full border border-white/10 text-xs">
+          <div className="hidden md:flex items-center gap-1.5 bg-black/30 backdrop-blur-md px-3 py-2 rounded-full border border-white/10 text-xs">
             <User className="w-3.5 h-3.5 text-sage" />
             <input
               type="text"
@@ -837,18 +838,18 @@ export function FaceScanner({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
           {/* Store Access Button */}
           {onOpenStore && (
             <button
               type="button"
               id="scanner-btn-store"
               onClick={onOpenStore}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-black/30 border-white/10 text-cream/80 hover:text-sage hover:border-sage/40 transition-colors backdrop-blur-md cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-medium border bg-black/30 border-white/10 text-cream/80 hover:text-sage hover:border-sage/40 transition-colors backdrop-blur-md cursor-pointer"
               title="Browse Mask Store"
             >
               <ShoppingBag className="w-3.5 h-3.5 text-sage" />
-              <span>Store</span>
+              <span className="hidden sm:inline">Store</span>
             </button>
           )}
 
@@ -858,17 +859,16 @@ export function FaceScanner({
               type="button"
               id="scanner-btn-history"
               onClick={onOpenHistory}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border bg-black/30 border-white/10 text-cream/80 hover:text-sage hover:border-sage/40 transition-colors backdrop-blur-md cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-medium border bg-black/30 border-white/10 text-cream/80 hover:text-sage hover:border-sage/40 transition-colors backdrop-blur-md cursor-pointer"
               title="View Historical Size Recommendations"
             >
               <History className="w-3.5 h-3.5 text-sage" />
-              <span>History</span>
+              <span className="hidden sm:inline">History</span>
             </button>
           )}
 
-          {/* Demo Mode Toggle */}
           {/* Demo Mode Toggle & Size Selector */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <button
               type="button"
               id="scanner-btn-demo-toggle"
@@ -881,7 +881,7 @@ export function FaceScanner({
                 }
               }}
               className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors backdrop-blur-md cursor-pointer',
+                'flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-medium border transition-colors backdrop-blur-md cursor-pointer',
                 isDemoMode
                   ? 'bg-sage/20 border-sage text-sage'
                   : 'bg-black/30 border-white/10 text-cream/70 hover:text-cream'
@@ -889,7 +889,7 @@ export function FaceScanner({
               title="Toggle Demo Simulation (usable without webcam)"
             >
               <Sliders className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{isDemoMode ? 'Demo Active' : 'Demo Mode'}</span>
+              <span className="text-[11px] font-semibold">{isDemoMode ? 'Demo' : 'Demo'}</span>
             </button>
 
             {isDemoMode && (
@@ -904,14 +904,14 @@ export function FaceScanner({
                       runDemoSimulation(sz);
                     }}
                     className={cn(
-                      'px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer',
+                      'px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer',
                       demoTargetSize === sz
-                        ? 'bg-sage text-olive-dark font-bold shadow-sm'
+                        ? 'bg-sage text-olive-dark font-bold shadow-xs'
                         : 'text-cream/70 hover:text-cream'
                     )}
                     title={`Simulate ${sz} face scan`}
                   >
-                    {sz}
+                    {sz[0]}<span className="hidden xs:inline">{sz.slice(1)}</span>
                   </button>
                 ))}
               </div>
@@ -938,7 +938,7 @@ export function FaceScanner({
       </header>
 
       {/* Main Viewport */}
-      <main className="flex-1 relative flex items-center justify-center p-3 md:p-6 mt-14 md:mt-12">
+      <main className="flex-1 relative flex items-center justify-center p-2 sm:p-4 md:p-6 mt-16 sm:mt-14 md:mt-12">
         {errorMessage && !isDemoMode ? (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -977,7 +977,7 @@ export function FaceScanner({
         ) : (
           <div
             ref={containerRef}
-            className="relative w-full max-w-4xl aspect-[4/3] md:aspect-video bg-black/50 rounded-3xl overflow-hidden shadow-2xl border border-white/15"
+            className="relative w-full max-w-sm sm:max-w-xl md:max-w-4xl aspect-[3/4] sm:aspect-[4/3] md:aspect-[16/10] lg:aspect-video h-[66vh] max-h-[580px] sm:h-auto sm:max-h-none bg-black/60 rounded-3xl overflow-hidden shadow-2xl border border-white/15 flex items-center justify-center transition-all duration-300"
           >
             {/* Rule of Thirds subtle alignment grid */}
             <div className="absolute inset-0 pointer-events-none z-10 opacity-15">
@@ -1093,7 +1093,7 @@ export function FaceScanner({
                 >
                   <div
                     className={cn(
-                      'w-56 h-72 md:w-64 md:h-80 rounded-[100%] border-2 transition-all duration-300 relative',
+                      'w-48 h-64 xs:w-52 xs:h-70 sm:w-56 sm:h-72 md:w-60 md:h-76 lg:w-64 lg:h-80 rounded-[100%] border-2 transition-all duration-300 relative transform -translate-y-6 sm:translate-y-0',
                       isAligning
                         ? isWellPositioned
                           ? 'border-green-400 bg-green-400/5 shadow-[0_0_20px_rgba(74,222,128,0.25)]'
@@ -1112,17 +1112,17 @@ export function FaceScanner({
                     <motion.div
                       initial={{ y: -10, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
-                      className="absolute top-10 bg-black/75 backdrop-blur-md px-5 py-2 rounded-full border border-white/15 flex items-center gap-2 max-w-sm text-center shadow-lg"
+                      className="absolute top-4 sm:top-8 bg-black/80 backdrop-blur-md px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-full border border-white/15 flex items-center gap-2 max-w-xs sm:max-w-sm text-center shadow-lg z-30"
                     >
                       <div
                         className={cn(
-                          'w-2.5 h-2.5 rounded-full shrink-0',
+                          'w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0',
                           isWellPositioned ? 'bg-green-400 animate-ping' : 'bg-red-400'
                         )}
                       />
                       <span
                         className={cn(
-                          'font-medium text-xs sm:text-sm',
+                          'font-medium text-xs sm:text-sm leading-tight',
                           isWellPositioned ? 'text-green-400 font-semibold' : 'text-cream'
                         )}
                       >
@@ -1399,7 +1399,7 @@ export function FaceScanner({
             </AnimatePresence>
 
             {/* Bottom Shutter Capture Button with Out-of-Frame Gate */}
-            <div className="absolute bottom-6 left-0 right-0 flex flex-col items-center justify-center z-30 pointer-events-none gap-2">
+            <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 flex flex-col items-center justify-center z-30 pointer-events-none gap-2 px-3">
               {!isScanning && !recommendedSize && (isCameraReady || isDemoMode) && (
                 <>
                   {/* Status chip if face is not positioned properly */}
@@ -1407,7 +1407,7 @@ export function FaceScanner({
                     <motion.div
                       initial={{ opacity: 0, y: 5 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="pointer-events-auto bg-black/85 backdrop-blur-md px-4 py-1.5 rounded-full border border-red-500/40 text-red-300 text-xs flex items-center gap-1.5 shadow-lg"
+                      className="pointer-events-auto bg-black/85 backdrop-blur-md px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full border border-red-500/40 text-red-300 text-[11px] sm:text-xs flex items-center gap-1.5 shadow-lg max-w-[90%] text-center"
                     >
                       <ShieldAlert className="w-3.5 h-3.5 text-red-400 shrink-0" />
                       <span>{faceFrameWarning || 'Position your face in the oval to enable scan'}</span>
@@ -1423,7 +1423,7 @@ export function FaceScanner({
                     disabled={!isDemoMode && !isFaceInFrame}
                     onClick={handleStartScanButton}
                     className={cn(
-                      'pointer-events-auto group relative flex items-center justify-center w-20 h-20 rounded-full shadow-2xl transition-all border border-white/20',
+                      'pointer-events-auto group relative flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-2xl transition-all border border-white/20',
                       isDemoMode || isFaceInFrame
                         ? 'bg-sage text-olive-dark hover:bg-sage/95 cursor-pointer'
                         : 'bg-sage/40 text-olive-dark/40 cursor-not-allowed opacity-60'
@@ -1434,8 +1434,8 @@ export function FaceScanner({
                         : 'Align face inside frame before scanning'
                     }
                   >
-                    <div className="absolute inset-1.5 border-2 border-olive-dark/25 rounded-full group-hover:scale-90 transition-transform" />
-                    <ScanFace className="w-8 h-8 text-olive-dark" />
+                    <div className="absolute inset-1 sm:inset-1.5 border-2 border-olive-dark/25 rounded-full group-hover:scale-90 transition-transform" />
+                    <ScanFace className="w-7 h-7 sm:w-8 sm:h-8 text-olive-dark" />
                   </motion.button>
                 </>
               )}

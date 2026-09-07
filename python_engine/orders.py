@@ -11,10 +11,10 @@ from datetime import datetime, timedelta
 def process_order(customer_name, customer_email, mask_style, mask_color, mask_size, quantity, base_price, shipping_address, city, postal_code):
     order_id = f"NVX-{random.randint(100000, 999999)}"
     qty = max(1, int(quantity or 1))
-    unit_price = float(base_price or 24.00)
+    unit_price = float(base_price or 799.00)
     subtotal = unit_price * qty
-    tax = round(subtotal * 0.08, 2)
-    shipping_fee = 0.00 if subtotal > 30.00 else 4.99
+    tax = round(subtotal * 0.05, 2)
+    shipping_fee = 0.00 if subtotal >= 499.00 else 49.00
     total = round(subtotal + tax + shipping_fee, 2)
 
     now = datetime.utcnow()

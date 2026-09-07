@@ -38,9 +38,9 @@ export function PaymentPortal({
   const [quantity, setQuantity] = useState(1);
   const [customerName, setCustomerName] = useState(userName || 'Ronit Raut');
   const [customerEmail, setCustomerEmail] = useState('ronitraut11@gmail.com');
-  const [shippingAddress, setShippingAddress] = useState('452 Innovation Blvd, Apt 3B');
-  const [city, setCity] = useState('San Francisco');
-  const [postalCode, setPostalCode] = useState('94105');
+  const [shippingAddress, setShippingAddress] = useState('B-402 Green Glen, HSR Layout');
+  const [city, setCity] = useState('Bengaluru');
+  const [postalCode, setPostalCode] = useState('560102');
   const [cardNumber, setCardNumber] = useState('4242 •••• •••• 4242');
   const [cardExpiry, setCardExpiry] = useState('12/28');
   const [cardCvv, setCardCvv] = useState('883');
@@ -50,9 +50,9 @@ export function PaymentPortal({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const subtotal = mask.priceNumeric * quantity;
-  const shipping = 0; // Free express shipping
-  const estimatedTax = Number((subtotal * 0.08).toFixed(2));
-  const totalAmount = Number((subtotal + shipping + estimatedTax).toFixed(2));
+  const shipping = 0; // Free express delivery across India
+  const estimatedTax = Math.round(subtotal * 0.05); // 5% GST
+  const totalAmount = subtotal + shipping + estimatedTax;
 
   const handlePay = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -221,7 +221,7 @@ export function PaymentPortal({
 
                 <div className="flex justify-between items-center border-t border-[#DDD6C5] pt-3 text-sm font-bold text-[#2E3019]">
                   <span>Total Amount Paid</span>
-                  <span>${completedOrder.totalAmount.toFixed(2)}</span>
+                  <span>₹{completedOrder.totalAmount.toLocaleString('en-IN')}</span>
                 </div>
               </div>
 
@@ -403,7 +403,7 @@ export function PaymentPortal({
                       ) : (
                         <>
                           <Lock className="w-4 h-4" />
-                          <span>Pay ${totalAmount.toFixed(2)} & Place Order</span>
+                          <span>Pay ₹{totalAmount.toLocaleString('en-IN')} & Place Order</span>
                         </>
                       )}
                     </button>
@@ -435,7 +435,7 @@ export function PaymentPortal({
                     </div>
                   </div>
                   <div className="text-right">
-                    <span className="font-bold text-sm text-[#2E3019]">${mask.priceNumeric.toFixed(2)}</span>
+                    <span className="font-bold text-sm text-[#2E3019]">₹{mask.priceNumeric.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
 
@@ -465,22 +465,22 @@ export function PaymentPortal({
                 <div className="space-y-2 text-xs text-[#5A5C27] border-b border-[#DDD6C5] pb-4">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
-                    <span className="font-semibold text-[#2E3019]">${subtotal.toFixed(2)}</span>
+                    <span className="font-semibold text-[#2E3019]">₹{subtotal.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Express Delivery</span>
                     <span className="font-semibold text-green-700">FREE</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>Estimated Tax</span>
-                    <span className="font-semibold text-[#2E3019]">${estimatedTax.toFixed(2)}</span>
+                    <span>GST (5%)</span>
+                    <span className="font-semibold text-[#2E3019]">₹{estimatedTax.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
 
                 {/* Total */}
                 <div className="flex justify-between items-center text-base font-extrabold text-[#2E3019]">
                   <span>Total Due</span>
-                  <span className="text-lg text-[#3B401F]">${totalAmount.toFixed(2)}</span>
+                  <span className="text-lg text-[#3B401F]">₹{totalAmount.toLocaleString('en-IN')}</span>
                 </div>
 
                 {/* Guarantees */}

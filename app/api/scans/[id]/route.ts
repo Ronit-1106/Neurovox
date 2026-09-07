@@ -7,22 +7,20 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const numericId = parseInt(id, 10);
-
-    if (isNaN(numericId)) {
-      return NextResponse.json({ success: false, error: 'Invalid ID' }, { status: 400 });
+    const numId = parseInt(id, 10);
+    if (isNaN(numId)) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid scan ID' },
+        { status: 400 }
+      );
     }
 
-    const deleted = await deleteFaceScanRecord(numericId);
-    if (!deleted) {
-      return NextResponse.json({ success: false, error: 'Scan not found' }, { status: 404 });
-    }
-
-    return NextResponse.json({ success: true, message: 'Scan deleted successfully' });
+    const success = await deleteFaceScanRecord(numId);
+    return NextResponse.json({ success });
   } catch (error: any) {
     console.error('Error deleting scan:', error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Failed to delete scan' },
+      { success: false, error: error?.message || 'Failed to delete scan' },
       { status: 500 }
     );
   }
