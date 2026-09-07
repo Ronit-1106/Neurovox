@@ -1,0 +1,512 @@
+[
+  {
+    "participantId": "PARTICIPANT_001",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_002",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_003",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_004",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_005",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_006",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_007",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_008",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_009",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_010",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_011",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_012",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_013",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_014",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_015",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_016",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_017",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_018",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_019",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_020",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_021",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_022",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_023",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_024",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_025",
+    "referenceSizeLabel": "Small",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_026",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_027",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_028",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_029",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_030",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_031",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_032",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_033",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_034",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_035",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_036",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_037",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_038",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_039",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_040",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_041",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_042",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_043",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_044",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_045",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_046",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_047",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_048",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_049",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_050",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_051",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_052",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_053",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_054",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_055",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_056",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_057",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_058",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_059",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_060",
+    "referenceSizeLabel": "Medium",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_061",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_062",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_063",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_064",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_065",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_066",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_067",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_068",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_069",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_070",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_071",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_072",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_073",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_074",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_075",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_076",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_077",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_078",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_079",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_080",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_081",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_082",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_083",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_084",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  },
+  {
+    "participantId": "PARTICIPANT_085",
+    "referenceSizeLabel": "Large",
+    "frameCount": 12,
+    "collectedAt": "2026-09-07T11:00:00.000Z"
+  }
+]

@@ -25,7 +25,7 @@ import {
   MultiFrameStabilityMetrics,
   REFERENCE_INTER_EYE_CM,
 } from '@/lib/facial-features';
-import { runLocalModelInference, ModelInferenceResult } from '@/lib/model-runner';
+import { runLocalModelInference, getOrInitOnnxSession, ModelInferenceResult } from '@/lib/model-runner';
 import { saveGuestScan } from '@/lib/storage';
 import { ModelEvaluationModal } from './model-evaluation-modal';
 import { DatasetCollectorModal } from './dataset-collector-modal';
@@ -121,6 +121,9 @@ export function FaceScanner({
     }
 
     initMediaPipe();
+    getOrInitOnnxSession().catch((err) => {
+      console.warn('ONNX Runtime Web preloading note:', err);
+    });
 
     return () => {
       active = false;

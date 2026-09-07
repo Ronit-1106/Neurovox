@@ -1,10 +1,10 @@
 /**
- * Neurovox Local ML Model Runner
- * Evaluates the 16 normalized geometric facial features locally on the user's device.
- * Employs client-side ONNX Runtime Web with zero-overhead fallback to direct MLP forward pass.
- * Returns genuine softmax prediction probabilities and model confidence.
+ * Neurovox Production Inference Engine:
+ * Employs ONNX Runtime Web as the sole production inference path for facial mask sizing.
+ * Runs locally on the client device inside WebAssembly with zero server latency.
+ * No heuristic fallbacks or simulated predictions.
  */
-import { MaskSize, ModelPrediction } from './mask-fit';
+import { MaskSize } from './mask-fit';
 
 export interface ModelInferenceResult {
   predictedSize: MaskSize;
@@ -15,29 +15,10 @@ export interface ModelInferenceResult {
     Large: number;
   };
   inferenceLatencyMs: number;
-  engine: 'onnxruntime-web' | 'local-wasm-mlp';
+  engine: 'onnxruntime-web';
 }
 
 const CLASSES: MaskSize[] = ['Small', 'Medium', 'Large'];
-
-// Forward pass mathematics matching PyTorch architecture:
-// Input (16) -> Dense(128, ReLU) -> Dense(64, ReLU) -> Dense(32, ReLU) -> Dense(3) -> Softmax
-function relu(x: number): number {
-  return Math.max(0.0, x);
-}
-
-function linear(x: number[], weights: number[][], biases: number[]): number[] {
-  const out: number[] = [];
-  for (let i = 0; i < weights.length; i++) {
-    let sum = biases[i];
-    const row = weights[i];
-    for (let j = 0; j < x.length; j++) {
-      sum += x[j] * row[j];
-    }
-    out.push(sum);
-  }
-  return out;
-}
 
 function softmax(arr: number[]): number[] {
   const maxVal = Math.max(...arr);
@@ -46,166 +27,119 @@ function softmax(arr: number[]): number[] {
   return exps.map((e) => e / Math.max(sumExps, 1e-12));
 }
 
-let cachedWeights: any = null;
+let onnxSessionPromise: Promise<any> | null = null;
+let cachedSession: any = null;
 
-async function getModelWeights(): Promise<any> {
-  if (cachedWeights) return cachedWeights;
-  try {
-    const res = await fetch('/models/model_weights.json');
-    if (res.ok) {
-      cachedWeights = await res.json();
-      return cachedWeights;
-    }
-  } catch (e) {
-    console.warn('Could not fetch static model_weights.json, requesting via API route:', e);
+/**
+ * Initializes and caches the ONNX Runtime Web InferenceSession.
+ * Loads the validated ONNX model binary and configures WebAssembly backend.
+ */
+export async function getOrInitOnnxSession(): Promise<any> {
+  if (cachedSession) {
+    return cachedSession;
   }
 
-  // Fallback to API route
-  try {
-    const res = await fetch('/api/ml/evaluation');
-    if (res.ok) {
-      const data = await res.json();
-      if (data.weights) {
-        cachedWeights = data.weights;
-        return cachedWeights;
+  if (onnxSessionPromise) {
+    return onnxSessionPromise;
+  }
+
+  onnxSessionPromise = (async () => {
+    if (typeof window === 'undefined') {
+      throw new Error('ONNX Runtime Web inference must be executed in a browser client environment.');
+    }
+
+    const ort = await import('onnxruntime-web');
+
+    // Configure local WebAssembly binary paths
+    if (ort.env && ort.env.wasm) {
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.simd = true;
+      ort.env.wasm.wasmPaths = '/';
+    }
+
+    const modelCandidates = [
+      '/models/neurovox_mask_classifier.onnx',
+      '/model/mask_classifier.onnx',
+      '/neurovox_mask_classifier.onnx',
+    ];
+
+    let session: any = null;
+    let lastError: Error | null = null;
+
+    for (const modelUrl of modelCandidates) {
+      try {
+        session = await ort.InferenceSession.create(modelUrl, {
+          executionProviders: ['wasm'],
+          graphOptimizationLevel: 'all',
+        });
+        if (session) {
+          break;
+        }
+      } catch (err: any) {
+        lastError = err;
       }
     }
-  } catch (e) {
-    console.error('Failed to load model weights:', e);
-  }
-  return null;
+
+    if (!session) {
+      throw new Error(
+        `Failed to load ONNX model binary for ONNX Runtime Web. Ensure the model has been exported: ${lastError?.message || 'Not found'}`
+      );
+    }
+
+    cachedSession = session;
+    return session;
+  })();
+
+  return onnxSessionPromise;
 }
 
 /**
- * Runs local inference on the extracted 16-feature vector.
+ * Executes production inference via ONNX Runtime Web.
+ * Sole inference path in production — takes the 16-element normalized feature vector
+ * and returns predicted mask size, confidence, and genuine class probabilities.
  */
 export async function runLocalModelInference(featureVector: number[]): Promise<ModelInferenceResult> {
+  if (!Array.isArray(featureVector) || featureVector.length !== 16) {
+    throw new Error(`Invalid feature vector for ONNX inference. Expected 16 elements, received ${featureVector?.length ?? 0}`);
+  }
+
   const startTime = performance.now();
+  const ort = await import('onnxruntime-web');
+  const session = await getOrInitOnnxSession();
 
-  // Try ONNX Runtime Web if available
-  try {
-    if (typeof window !== 'undefined') {
-      const ort = await import('onnxruntime-web');
-      if (ort && ort.InferenceSession) {
-        const session = await ort.InferenceSession.create('/models/neurovox_mask_classifier.onnx', {
-          executionProviders: ['wasm'],
-        });
-        const tensor = new ort.Tensor('float32', Float32Array.from(featureVector), [1, 16]);
-        const feeds = { [session.inputNames[0]]: tensor };
-        const results = await session.run(feeds);
-        const outputTensor = results[session.outputNames[0]];
-        const rawLogits = Array.from(outputTensor.data as Float32Array);
-        const probs = softmax(rawLogits);
+  const inputTensor = new ort.Tensor('float32', Float32Array.from(featureVector), [1, 16]);
+  const inputName = session.inputNames[0] || 'input_features';
+  const feeds: Record<string, any> = { [inputName]: inputTensor };
 
-        const bestIdx = probs.indexOf(Math.max(...probs));
-        const endTime = performance.now();
+  const results = await session.run(feeds);
 
-        return {
-          predictedSize: CLASSES[bestIdx],
-          confidence: Math.round(probs[bestIdx] * 100) / 100,
-          probabilities: {
-            Small: Math.round(probs[0] * 1000) / 1000,
-            Medium: Math.round(probs[1] * 1000) / 1000,
-            Large: Math.round(probs[2] * 1000) / 1000,
-          },
-          inferenceLatencyMs: Math.round((endTime - startTime) * 10) / 10,
-          engine: 'onnxruntime-web',
-        };
-      }
-    }
-  } catch (onnxErr) {
-    // ONNX Runtime Web is optional; proceed seamlessly to local high-precision forward pass
-  }
-
-  // Direct mathematical forward pass using calibrated MLP weights
-  const weights = await getModelWeights();
-  if (weights && weights['network.0.weight']) {
-    // Apply feature standardization if scaler statistics are available
-    let inputVector = featureVector;
-    if (Array.isArray(weights.scaler_means) && Array.isArray(weights.scaler_stds)) {
-      inputVector = featureVector.map((v, i) => {
-        const mean = weights.scaler_means[i] ?? 0;
-        const std = weights.scaler_stds[i] || 1;
-        return (v - mean) / std;
-      });
-    }
-
-    const w0: number[][] = weights['network.0.weight'];
-    const b0: number[] = weights['network.0.bias'];
-    const w3: number[][] = weights['network.3.weight'];
-    const b3: number[] = weights['network.3.bias'];
-    const w6: number[][] = weights['network.6.weight'];
-    const b6: number[] = weights['network.6.bias'];
-    const w8: number[][] | undefined = weights['network.8.weight'];
-    const b8: number[] | undefined = weights['network.8.bias'];
-
-    let logits: number[];
-    if (w8 && b8) {
-      // 4-layer architecture: 16 -> 128 -> 64 -> 32 -> 3
-      const h1 = linear(inputVector, w0, b0).map(relu);
-      const h2 = linear(h1, w3, b3).map(relu);
-      const h3 = linear(h2, w6, b6).map(relu);
-      logits = linear(h3, w8, b8);
-    } else {
-      // 3-layer architecture: 16 -> 64 -> 32 -> 3
-      const h1 = linear(inputVector, w0, b0).map(relu);
-      const h2 = linear(h1, w3, b3).map(relu);
-      logits = linear(h2, w6, b6);
-    }
-
-    const probs = softmax(logits);
-    const bestIdx = probs.indexOf(Math.max(...probs));
-    const endTime = performance.now();
-
-    return {
-      predictedSize: CLASSES[bestIdx],
-      confidence: Math.round(probs[bestIdx] * 100) / 100,
-      probabilities: {
-        Small: Math.round(probs[0] * 1000) / 1000,
-        Medium: Math.round(probs[1] * 1000) / 1000,
-        Large: Math.round(probs[2] * 1000) / 1000,
-      },
-      inferenceLatencyMs: Math.round((endTime - startTime) * 10) / 10,
-      engine: 'local-wasm-mlp',
-    };
-  }
-
-  // Anthropometric fallback if weights are not yet fetched
-  const jawNorm = featureVector[0] || 1.95;
-  const heightNorm = featureVector[1] || 1.82;
-  const aspect = featureVector[9] || 1.05;
-
-  let pSmall = 0.1;
-  let pMed = 0.8;
-  let pLarge = 0.1;
-
-  if (jawNorm < 1.85 && heightNorm < 1.75) {
-    pSmall = 0.84;
-    pMed = 0.13;
-    pLarge = 0.03;
-  } else if (jawNorm > 2.15 || heightNorm > 1.95) {
-    pSmall = 0.03;
-    pMed = 0.15;
-    pLarge = 0.82;
+  // Read output probabilities or logits
+  let probs: number[];
+  if (results.probabilities) {
+    const rawData = Array.from(results.probabilities.data as Float32Array);
+    probs = rawData;
+  } else if (results.logits) {
+    const rawLogits = Array.from(results.logits.data as Float32Array);
+    probs = softmax(rawLogits);
   } else {
-    pSmall = 0.08;
-    pMed = 0.84;
-    pLarge = 0.08;
+    const firstOutputName = session.outputNames[0];
+    const outputTensor = results[firstOutputName];
+    const raw = Array.from(outputTensor.data as Float32Array);
+    probs = raw.length === 3 && Math.abs(raw.reduce((a, b) => a + b, 0) - 1.0) < 0.05 ? raw : softmax(raw);
   }
 
-  const rawProbs = [pSmall, pMed, pLarge];
-  const bestIdx = rawProbs.indexOf(Math.max(...rawProbs));
+  const bestIdx = probs.indexOf(Math.max(...probs));
   const endTime = performance.now();
 
   return {
     predictedSize: CLASSES[bestIdx],
-    confidence: rawProbs[bestIdx],
+    confidence: Math.round(probs[bestIdx] * 100) / 100,
     probabilities: {
-      Small: pSmall,
-      Medium: pMed,
-      Large: pLarge,
+      Small: Math.round(probs[0] * 1000) / 1000,
+      Medium: Math.round(probs[1] * 1000) / 1000,
+      Large: Math.round(probs[2] * 1000) / 1000,
     },
     inferenceLatencyMs: Math.round((endTime - startTime) * 10) / 10,
-    engine: 'local-wasm-mlp',
+    engine: 'onnxruntime-web',
   };
 }

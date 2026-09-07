@@ -1,7 +1,7 @@
 {
   "model_name": "Neurovox Mask Size Classifier MLP",
-  "model_version": "v2.1.0-onnx",
-  "model_architecture": "16 -> Dense(128, ReLU) -> Dense(64, ReLU) -> Dense(32, ReLU) -> Dense(3, Softmax)",
+  "model_version": "v2.2.0-onnx",
+  "model_architecture": "16 -> Dense(128, ReLU) -> Dense(64, ReLU) -> Dense(32, ReLU) -> Dense(3, Logits/Softmax)",
   "input_features_count": 16,
   "input_feature_names": [
     "jaw_width_norm",
@@ -27,61 +27,61 @@
     "Large"
   ],
   "evaluation": {
-    "overall_accuracy": 0.7689,
-    "macro_precision": 0.7657,
-    "macro_recall": 0.7889,
-    "macro_f1": 0.7581,
-    "total_test_samples": 225,
+    "overall_accuracy": 0.8333,
+    "macro_precision": 0.8333,
+    "macro_recall": 0.8333,
+    "macro_f1": 0.8333,
+    "total_test_samples": 144,
     "confusion_matrix": [
       [
-        78,
+        24,
         12,
         0
       ],
       [
-        0,
-        55,
-        35
+        12,
+        60,
+        0
       ],
       [
         0,
-        5,
-        40
+        0,
+        36
       ]
     ],
     "per_class": {
       "Small": {
-        "accuracy": 0.8667,
-        "precision": 1.0,
-        "recall": 0.8667,
-        "f1_score": 0.9286,
-        "support": 90,
-        "tp": 78,
-        "fp": 0,
+        "accuracy": 0.6667,
+        "precision": 0.6667,
+        "recall": 0.6667,
+        "f1_score": 0.6667,
+        "support": 36,
+        "tp": 24,
+        "fp": 12,
         "fn": 12,
-        "tn": 135
+        "tn": 96
       },
       "Medium": {
-        "accuracy": 0.6111,
-        "precision": 0.7639,
-        "recall": 0.6111,
-        "f1_score": 0.679,
-        "support": 90,
-        "tp": 55,
-        "fp": 17,
-        "fn": 35,
-        "tn": 118
+        "accuracy": 0.8333,
+        "precision": 0.8333,
+        "recall": 0.8333,
+        "f1_score": 0.8333,
+        "support": 72,
+        "tp": 60,
+        "fp": 12,
+        "fn": 12,
+        "tn": 60
       },
       "Large": {
-        "accuracy": 0.8889,
-        "precision": 0.5333,
-        "recall": 0.8889,
-        "f1_score": 0.6667,
-        "support": 45,
-        "tp": 40,
-        "fp": 35,
-        "fn": 5,
-        "tn": 145
+        "accuracy": 1.0,
+        "precision": 1.0,
+        "recall": 1.0,
+        "f1_score": 1.0,
+        "support": 36,
+        "tp": 36,
+        "fp": 0,
+        "fn": 0,
+        "tn": 108
       }
     },
     "classes": [
@@ -91,11 +91,23 @@
     ]
   },
   "training_dataset": {
-    "strategy": "Participant-isolated split (zero cross-set identity leakage)",
-    "train_participants": 70,
-    "val_participants": 15,
-    "test_participants": 15,
-    "test_samples_count": 225
+    "strategy": "Participant-isolated split on real collected participant records",
+    "total_participants": 86,
+    "train_samples_count": 730,
+    "val_samples_count": 156,
+    "test_samples_count": 144,
+    "source": "ml/collected_dataset"
   },
-  "disclaimer": "AI-assisted anthropometric sizing model for protective mask fitting. Not a medical device or certified clinical caliper."
+  "onnx_export": {
+    "opset": 14,
+    "inputs": [
+      "input_features (shape: [batch, 16])"
+    ],
+    "outputs": [
+      "logits (shape: [batch, 3])",
+      "probabilities (shape: [batch, 3])"
+    ],
+    "validated_accuracy": 0.8333333333333334
+  },
+  "disclaimer": "AI-assisted anthropometric sizing model for protective mask fitting. Not a medical device or clinical diagnostic instrument."
 }

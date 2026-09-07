@@ -1,0 +1,432 @@
+{
+  "participantId": "PARTICIPANT_085",
+  "consentConfirmed": true,
+  "referenceSizeLabel": "Large",
+  "measuredJawWidthCm": 14.4,
+  "measuredFaceHeightCm": 13.1,
+  "notes": "Verified anthropometric ground-truth physical caliper session",
+  "frameCount": 12,
+  "frames": [
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        1.4,
+        1.4,
+        -0.9
+      ],
+      "headPose": {
+        "yawDeg": 1.4,
+        "pitchDeg": 1.4,
+        "rollDeg": -0.9,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        -3.0,
+        1.0,
+        -2.0
+      ],
+      "headPose": {
+        "yawDeg": -3.0,
+        "pitchDeg": 1.0,
+        "rollDeg": -2.0,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        -1.1,
+        -1.6,
+        -0.1
+      ],
+      "headPose": {
+        "yawDeg": -1.1,
+        "pitchDeg": -1.6,
+        "rollDeg": -0.1,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        -1.3,
+        -3.8,
+        -1.1
+      ],
+      "headPose": {
+        "yawDeg": -1.3,
+        "pitchDeg": -3.8,
+        "rollDeg": -1.1,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        -2.0,
+        -2.8,
+        -0.3
+      ],
+      "headPose": {
+        "yawDeg": -2.0,
+        "pitchDeg": -2.8,
+        "rollDeg": -0.3,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        -5.5,
+        -0.4,
+        -0.7
+      ],
+      "headPose": {
+        "yawDeg": -5.5,
+        "pitchDeg": -0.4,
+        "rollDeg": -0.7,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        -1.2,
+        -0.2,
+        -0.7
+      ],
+      "headPose": {
+        "yawDeg": -1.2,
+        "pitchDeg": -0.2,
+        "rollDeg": -0.7,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        -2.0,
+        1.0,
+        1.2
+      ],
+      "headPose": {
+        "yawDeg": -2.0,
+        "pitchDeg": 1.0,
+        "rollDeg": 1.2,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        -0.7,
+        0.1,
+        2.9
+      ],
+      "headPose": {
+        "yawDeg": -0.7,
+        "pitchDeg": 0.1,
+        "rollDeg": 2.9,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        2.2,
+        2.5,
+        2.3
+      ],
+      "headPose": {
+        "yawDeg": 2.2,
+        "pitchDeg": 2.5,
+        "rollDeg": 2.3,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        1.9,
+        -0.3,
+        1.2
+      ],
+      "headPose": {
+        "yawDeg": 1.9,
+        "pitchDeg": -0.3,
+        "rollDeg": 1.2,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    },
+    {
+      "featureVector": [
+        2.1918,
+        1.9939,
+        2.3744,
+        2.0852,
+        1.8569,
+        0.761,
+        0.5479,
+        1.583,
+        0.2289,
+        1.0992,
+        0.9231,
+        0.8397,
+        0.3817,
+        0.0,
+        -1.7,
+        -0.1
+      ],
+      "headPose": {
+        "yawDeg": 0.0,
+        "pitchDeg": -1.7,
+        "rollDeg": -0.1,
+        "isValidPose": true,
+        "guidanceMessage": "Pose optimal \u2022 Hold steady"
+      },
+      "estimatedMeasurements": {
+        "jawWidthCm": 14.5,
+        "faceHeightCm": 12.6,
+        "faceWidthCm": 15.7,
+        "chinToNoseCm": 4.8,
+        "interEyeReferenceCm": 6.3,
+        "aspectRatio": 1.1
+      }
+    }
+  ],
+  "collectedAt": "2026-09-07T11:00:00.000Z"
+}
