@@ -1,1448 +1,943 @@
 'use client';
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import Link from 'next/link';
-import { motion, AnimatePresence } from 'motion/react';
-import confetti from 'canvas-confetti';
 import {
-  ArrowLeft,
   Camera,
-  CheckCircle2,
-  LoaderCircle,
-  ScanFace,
-  Sparkles,
-  AlertCircle,
-  AlertTriangle,
-  ShieldAlert,
   RefreshCw,
-  Sliders,
+  CheckCircle2,
+  AlertTriangle,
+  Layers,
+  ArrowRight,
   ShieldCheck,
-  Eye,
-  Check,
-  History,
-  HardDrive,
-  CloudCheck,
-  User,
-  FileText,
-  ShoppingBag
+  RotateCcw,
+  Sparkles,
+  Info,
+  Database,
+  BarChart2,
+  Sliders,
 } from 'lucide-react';
+import { MaskSize, ModelPrediction, MASK_SIZE_GUIDELINES } from '@/lib/mask-fit';
 import {
-  KEY_LANDMARK_INDICES,
-  MASK_STYLES,
-  MASK_SIZE_OPTIONS,
-  SizeOptionDetails,
-  FaceMeasurements,
-  MaskSize,
-  computeMaskSizeFromBiometrics,
-  generateSimulatedFaceMeasurements
-} from '@/lib/mask-fit';
-import {
-  StoredFaceScan,
-  getSavedUsername,
-  saveUsername,
-  saveLocalFaceScan,
-  syncScanToCloud
-} from '@/lib/storage';
-import { cn } from '@/lib/utils';
+  extractFacialFeatures,
+  calculateStabilityMetrics,
+  ExtractedFrameFeatures,
+  HeadPoseEstimation,
+  MultiFrameStabilityMetrics,
+  REFERENCE_INTER_EYE_CM,
+} from '@/lib/facial-features';
+import { runLocalModelInference, ModelInferenceResult } from '@/lib/model-runner';
+import { saveGuestScan } from '@/lib/storage';
+import { ModelEvaluationModal } from './model-evaluation-modal';
+import { DatasetCollectorModal } from './dataset-collector-modal';
+import { installConsoleGuard } from './console-guard';
 
 interface FaceScannerProps {
-  initialUserName?: string;
-  onOpenHistory?: () => void;
-  onGoHome?: () => void;
-  onOpenStore?: () => void;
-  onProceedToStore?: (selectedMaskId: string, recommendedSize: MaskSize, biometrics: FaceMeasurements) => void;
+  onScanComplete: (result: {
+    measurements: {
+      jawWidth: number;
+      faceHeight: number;
+      faceWidth?: number;
+      referenceInterEyeDistanceCm: number;
+    };
+    prediction: ModelPrediction;
+  }) => void;
+  onNavigateToStore?: (recommendedSize: MaskSize) => void;
+  userId?: string;
+  userName?: string;
 }
 
+const TARGET_FRAME_COUNT = 35;
+
 export function FaceScanner({
-  initialUserName,
-  onOpenHistory,
-  onGoHome,
-  onOpenStore,
-  onProceedToStore,
+  onScanComplete,
+  onNavigateToStore,
+  userId = 'guest',
+  userName = 'User',
 }: FaceScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // Status flags
-  const [isCameraReady, setIsCameraReady] = useState(false);
-  const [isAiLoaded, setIsAiLoaded] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isDemoMode, setIsDemoMode] = useState(false);
-  const [demoTargetSize, setDemoTargetSize] = useState<MaskSize>('Medium');
-
-  // User Profile details
-  const [username, setUsername] = useState(initialUserName || '');
-  const [scanNotes, setScanNotes] = useState('');
-  const [currentScanRecord, setCurrentScanRecord] = useState<StoredFaceScan | null>(null);
-
-  // Scanning states & strict out-of-frame detection
-  const [isAligning, setIsAligning] = useState(false);
-  const [isScanning, setIsScanning] = useState(false);
-  const [scanProgress, setScanProgress] = useState(0);
-  const [alignmentStatus, setAlignmentStatus] = useState('Position your face in the oval');
-  const [isWellPositioned, setIsWellPositioned] = useState(false);
-  const [holdStillCountdown, setHoldStillCountdown] = useState<number | null>(null);
-  const [isFaceInFrame, setIsFaceInFrame] = useState(false);
-  const [faceFrameWarning, setFaceFrameWarning] = useState<string | null>(null);
-  const [isScanPaused, setIsScanPaused] = useState(false);
-
-  // Results
-  const [recommendedSize, setRecommendedSize] = useState<MaskSize | null>(null);
-  const [selectedSize, setSelectedSize] = useState<MaskSize>('Medium');
-  const [biometrics, setBiometrics] = useState<FaceMeasurements | null>(null);
-  const [selectedStyleId, setSelectedStyleId] = useState<string | null>(null);
-  const [isOrderPlaced, setIsOrderPlaced] = useState(false);
-
-  // Real-time smoothing refs
-  const landmarkerRef = useRef<any>(null);
   const animFrameIdRef = useRef<number | null>(null);
-  const lastVideoTimeRef = useRef<number>(-1);
-  const isScanningRef = useRef(false);
-  const isAligningRef = useRef(false);
-  const holdStillTimerRef = useRef<number | null>(null);
-  const isFaceInFrameRef = useRef(false);
-  const lostFaceFramesRef = useRef(0);
-  const validScanFramesRef = useRef(0);
+  const landmarkerRef = useRef<any>(null);
 
-  // Biometric accumulator during active scan
-  const widthSamplesRef = useRef<number[]>([]);
-  const heightSamplesRef = useRef<number[]>([]);
-  const ratioSamplesRef = useRef<number[]>([]);
-  const estWidthCmSamplesRef = useRef<number[]>([]);
-  const estHeightCmSamplesRef = useRef<number[]>([]);
-  const lastValidMeasurementsRef = useRef<FaceMeasurements | null>(null);
+  const [cameraState, setCameraState] = useState<'idle' | 'initializing' | 'active' | 'denied'>('idle');
+  const [isScanning, setIsScanning] = useState(false);
+  const [capturedFrames, setCapturedFrames] = useState<ExtractedFrameFeatures[]>([]);
+  const [currentPose, setCurrentPose] = useState<HeadPoseEstimation>({
+    yawDeg: 0,
+    pitchDeg: 0,
+    rollDeg: 0,
+    isValidPose: true,
+    guidanceMessage: 'Position face within the calibration guide',
+  });
+  const [liveMeasurements, setLiveMeasurements] = useState<{
+    jawWidthCm: number;
+    faceHeightCm: number;
+    aspectRatio: number;
+  } | null>(null);
 
-  // Available cameras
-  const [availableDevices, setAvailableDevices] = useState<MediaDeviceInfo[]>([]);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | undefined>(undefined);
+  const [scanResult, setScanResult] = useState<{
+    metrics: MultiFrameStabilityMetrics;
+    inference: ModelInferenceResult;
+    isDemoSimulation: boolean;
+  } | null>(null);
 
-  // Load saved username on mount
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [savingScan, setSavingScan] = useState(false);
+  const [savedScanId, setSavedScanId] = useState<string | null>(null);
+
+  // Modals
+  const [showEvaluationModal, setShowEvaluationModal] = useState(false);
+  const [showCollectorModal, setShowCollectorModal] = useState(false);
+
+  // Initialize MediaPipe Face Landmarker
   useEffect(() => {
-    const saved = getSavedUsername();
-    setUsername(saved || 'Ronit');
-  }, []);
+    let active = true;
 
-  // Update username in storage when changed
-  const handleUsernameChange = (newName: string) => {
-    setUsername(newName);
-    saveUsername(newName);
-  };
-
-  // 1. Initialize MediaPipe Face Landmarker safely with GPU fallback to CPU
-  useEffect(() => {
-    let isCancelled = false;
-
-    async function initVisionAi() {
+    async function initMediaPipe() {
       try {
-        const { FilesetResolver, FaceLandmarker } = await import('@mediapipe/tasks-vision');
-
-        const filesetResolver = await FilesetResolver.forVisionTasks(
-          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm'
+        installConsoleGuard();
+        const vision = await import('@mediapipe/tasks-vision');
+        const filesetResolver = await vision.FilesetResolver.forVisionTasks(
+          'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.21/wasm'
         );
+        const faceLandmarker = await vision.FaceLandmarker.createFromOptions(filesetResolver, {
+          baseOptions: {
+            modelAssetPath:
+              'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+            delegate: 'GPU',
+          },
+          outputFaceBlendshapes: false,
+          outputFacialTransformationMatrixes: false,
+          runningMode: 'VIDEO',
+          numFaces: 1,
+        });
 
-        if (isCancelled) return;
-
-        let landmarkerInstance: any = null;
-
-        // Try GPU first
-        try {
-          landmarkerInstance = await FaceLandmarker.createFromOptions(filesetResolver, {
-            baseOptions: {
-              modelAssetPath:
-                'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-              delegate: 'GPU'
-            },
-            outputFaceBlendshapes: false,
-            runningMode: 'VIDEO',
-            numFaces: 1
-          });
-        } catch (gpuError) {
-          console.warn('FaceLandmarker GPU init failed, falling back to CPU:', gpuError);
-          landmarkerInstance = await FaceLandmarker.createFromOptions(filesetResolver, {
-            baseOptions: {
-              modelAssetPath:
-                'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-              delegate: 'CPU'
-            },
-            outputFaceBlendshapes: false,
-            runningMode: 'VIDEO',
-            numFaces: 1
-          });
+        if (active) {
+          landmarkerRef.current = faceLandmarker;
         }
-
-        if (!isCancelled) {
-          landmarkerRef.current = landmarkerInstance;
-          setIsAiLoaded(true);
-        }
-      } catch (err: any) {
-        console.error('Failed to load Face Landmarker AI models:', err);
-        if (!isCancelled) {
-          setErrorMessage('Unable to load AI Vision models. You can test with Demo Simulation Mode.');
-        }
+      } catch (err) {
+        console.warn('MediaPipe initialization warning (demo mode available):', err);
       }
     }
 
-    initVisionAi();
+    initMediaPipe();
 
     return () => {
-      isCancelled = true;
-      if (landmarkerRef.current) {
-        try {
-          landmarkerRef.current.close();
-        } catch {}
-      }
+      active = false;
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
     };
   }, []);
 
-  // 2. Camera setup & stream management
-  const startCamera = useCallback(async (deviceId?: string) => {
+  // Camera stream handler
+  const startCamera = async () => {
+    setCameraState('initializing');
+    setScanResult(null);
+    setCapturedFrames([]);
+    setIsDemoMode(false);
+
     try {
-      setErrorMessage(null);
-
-      // Stop previous tracks if any
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach((track) => track.stop());
-      }
-
-      const constraints: MediaStreamConstraints = {
-        video: deviceId
-          ? { deviceId: { exact: deviceId } }
-          : {
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              facingMode: 'user'
-            },
-        audio: false
-      };
-
-      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          facingMode: 'user',
+        },
+      });
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().catch(() => {});
-          setIsCameraReady(true);
-        };
+        await videoRef.current.play();
+        setCameraState('active');
+        startDetectionLoop();
       }
-
-      // Enumerate cameras
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevs = devices.filter((d) => d.kind === 'videoinput');
-      setAvailableDevices(videoDevs);
     } catch (err: any) {
-      console.warn('Camera access error:', err);
-      setIsCameraReady(false);
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setErrorMessage('Camera access was denied. Please allow camera permissions in your browser or launch Demo Mode.');
-      } else {
-        setErrorMessage('No functional camera detected or camera is in use by another app.');
-      }
+      console.warn('Camera access denied or unreadable:', err);
+      setCameraState('denied');
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    if (!isDemoMode) {
-      startCamera(selectedDeviceId);
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach((t) => t.stop());
+      videoRef.current.srcObject = null;
     }
+    if (animFrameIdRef.current) {
+      cancelAnimationFrame(animFrameIdRef.current);
+      animFrameIdRef.current = null;
+    }
+    setCameraState('idle');
+    setIsScanning(false);
+  };
 
-    return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach((t) => t.stop());
-      }
-    };
-  }, [startCamera, selectedDeviceId, isDemoMode]);
+  // Continuous Landmark Detection Loop
+  const startDetectionLoop = useCallback(() => {
+    let lastVideoTime = -1;
 
-  // 3. Real-time detection loop
-  useEffect(() => {
-    if (!isCameraReady || !isAiLoaded || isDemoMode) return;
-
-    let isRunning = true;
-
-    const processFrame = () => {
-      if (!isRunning) return;
-
+    const render = () => {
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      const landmarker = landmarkerRef.current;
 
-      if (video && canvas && landmarker && video.readyState >= 2 && !video.paused) {
+      if (video && canvas && video.readyState >= 2) {
+        if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+        }
+
         const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        if (video.currentTime !== lastVideoTimeRef.current) {
-          lastVideoTimeRef.current = video.currentTime;
+          if (landmarkerRef.current && video.currentTime !== lastVideoTime) {
+            lastVideoTime = video.currentTime;
+            try {
+              installConsoleGuard();
+              const startTimeMs = performance.now();
+              const results = landmarkerRef.current.detectForVideo(video, startTimeMs);
 
-          // Align canvas display dimensions
-          if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-          }
+              if (results && results.faceLandmarks && results.faceLandmarks.length > 0) {
+                const rawLandmarks = results.faceLandmarks[0];
+                const landmarksMap: Record<number, { x: number; y: number; z?: number }> = {};
+                rawLandmarks.forEach((pt: any, idx: number) => {
+                  landmarksMap[idx] = { x: pt.x, y: pt.y, z: pt.z };
+                });
 
-          if (ctx) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const vWidth = video.videoWidth || 640;
+                const vHeight = video.videoHeight || 480;
+                const frameFeatures = extractFacialFeatures(landmarksMap, vWidth, vHeight);
+                setCurrentPose(frameFeatures.headPose);
+                setLiveMeasurements({
+                  jawWidthCm: frameFeatures.estimatedMeasurements.jawWidthCm,
+                  faceHeightCm: frameFeatures.estimatedMeasurements.faceHeightCm,
+                  aspectRatio: frameFeatures.estimatedMeasurements.aspectRatio,
+                });
 
-            const results = landmarker.detectForVideo(video, performance.now());
+                // Draw minimal high-precision visual biometric mesh
+                drawFacialOverlay(ctx, canvas.width, canvas.height, landmarksMap, frameFeatures.headPose.isValidPose);
 
-            if (results && results.faceLandmarks && results.faceLandmarks.length > 0) {
-              const landmarks = results.faceLandmarks[0];
-
-              // Check landmarks bounding box to verify face is fully in frame
-              const xs = landmarks.map((l: any) => l.x);
-              const ys = landmarks.map((l: any) => l.y);
-              const minX = Math.min(...xs);
-              const maxX = Math.max(...xs);
-              const minY = Math.min(...ys);
-              const maxY = Math.max(...ys);
-
-              const faceWidthNorm = maxX - minX;
-              const faceHeightNorm = maxY - minY;
-              const faceCenterX = (minX + maxX) / 2;
-              const faceCenterY = (minY + maxY) / 2;
-              const centerOffset = Math.hypot(faceCenterX - 0.5, faceCenterY - 0.5);
-
-              // Strict boundary & positioning checks: is face clipped or out of frame?
-              const isClippedAtEdge = minX < 0.025 || maxX > 0.975 || minY < 0.025 || maxY > 0.975;
-              const isTooFar = faceWidthNorm < 0.16 || faceHeightNorm < 0.18;
-              const isTooClose = faceWidthNorm > 0.68;
-              const isWayOffCenter = centerOffset > 0.20;
-
-              let frameWarning: string | null = null;
-              let inFrameValid = true;
-
-              if (isClippedAtEdge) {
-                frameWarning = 'Face cut off at camera edge — move fully into view';
-                inFrameValid = false;
-              } else if (isTooFar) {
-                frameWarning = 'Move slightly closer to camera';
-                inFrameValid = false;
-              } else if (isTooClose) {
-                frameWarning = 'Step slightly back';
-                inFrameValid = false;
-              } else if (isWayOffCenter) {
-                frameWarning = 'Center your face in the oval guide';
-                inFrameValid = false;
-              }
-
-              setIsFaceInFrame(inFrameValid);
-              isFaceInFrameRef.current = inFrameValid;
-              setFaceFrameWarning(frameWarning);
-
-              const pLeftJaw = landmarks[234];
-              const pRightJaw = landmarks[454];
-              const pNoseBridge = landmarks[168];
-              const pChin = landmarks[152];
-              
-              // High accuracy pupil centers via inner & outer canthi
-              const pLeftOuter = landmarks[33];
-              const pLeftInner = landmarks[133];
-              const pRightOuter = landmarks[263];
-              const pRightInner = landmarks[362];
-
-              const ptLeft = { x: pLeftJaw.x * canvas.width, y: pLeftJaw.y * canvas.height };
-              const ptRight = { x: pRightJaw.x * canvas.width, y: pRightJaw.y * canvas.height };
-              const ptNose = { x: pNoseBridge.x * canvas.width, y: pNoseBridge.y * canvas.height };
-              const ptChin = { x: pChin.x * canvas.width, y: pChin.y * canvas.height };
-
-              // 2D distance measurements in pixels
-              const jawWidthPx = Math.hypot(ptRight.x - ptLeft.x, ptRight.y - ptLeft.y);
-              const faceHeightPx = Math.hypot(ptChin.x - ptNose.x, ptChin.y - ptNose.y);
-              const currentRatio = faceHeightPx > 0 ? jawWidthPx / faceHeightPx : 1.15;
-
-              // Physical metric estimation using Inter-Pupillary Distance (IPD ~63mm average in adult humans)
-              let estimatedWidthCm = 13.1;
-              let estimatedHeightCm = 11.8;
-              if (pLeftOuter && pLeftInner && pRightOuter && pRightInner) {
-                const leftPupilX = ((pLeftOuter.x + pLeftInner.x) / 2) * canvas.width;
-                const leftPupilY = ((pLeftOuter.y + pLeftInner.y) / 2) * canvas.height;
-                const rightPupilX = ((pRightOuter.x + pRightInner.x) / 2) * canvas.width;
-                const rightPupilY = ((pRightOuter.y + pRightInner.y) / 2) * canvas.height;
-
-                const ipdPx = Math.hypot(rightPupilX - leftPupilX, rightPupilY - leftPupilY);
-                if (ipdPx > 22) {
-                  // Standard adult human IPD is 63 mm
-                  const pxPerMm = ipdPx / 63;
-                  // Landmarks 234 to 454 measure 2D projected zygomatic curve; true 3D lateral curvature span is ~1.18x
-                  const fullFaceSpanMm = (jawWidthPx * 1.18) / pxPerMm;
-                  const faceHeightMm = faceHeightPx / pxPerMm;
-
-                  const rawWidthCm = Number((fullFaceSpanMm / 10).toFixed(1));
-                  const rawHeightCm = Number((faceHeightMm / 10).toFixed(1));
-
-                  // Keep within realistic human anatomy bounds (10.5cm - 16.5cm width, 9.5cm - 15.0cm height)
-                  estimatedWidthCm = Math.min(16.5, Math.max(10.5, rawWidthCm));
-                  estimatedHeightCm = Math.min(15.0, Math.max(9.5, rawHeightCm));
+                // If actively scanning and pose is valid, accumulate frame
+                if (isScanning && frameFeatures.headPose.isValidPose) {
+                  setCapturedFrames((prev) => {
+                    const next = [...prev, frameFeatures];
+                    if (next.length >= TARGET_FRAME_COUNT) {
+                      completeScan(next, false);
+                    }
+                    return next;
+                  });
                 }
+              } else {
+                setCurrentPose({
+                  yawDeg: 0,
+                  pitchDeg: 0,
+                  rollDeg: 0,
+                  isValidPose: false,
+                  guidanceMessage: 'Align face inside the viewport guide',
+                });
               }
-
-              const currentMeasurements: FaceMeasurements = {
-                width: jawWidthPx,
-                height: faceHeightPx,
-                ratio: Number(currentRatio.toFixed(2)),
-                estimatedWidthCm,
-                estimatedHeightCm,
-                confidence: 0.98
-              };
-
-              lastValidMeasurementsRef.current = currentMeasurements;
-
-              // Buffer samples for smoothing
-              widthSamplesRef.current.push(jawWidthPx);
-              if (widthSamplesRef.current.length > 25) widthSamplesRef.current.shift();
-
-              heightSamplesRef.current.push(faceHeightPx);
-              if (heightSamplesRef.current.length > 25) heightSamplesRef.current.shift();
-
-              // If active scanning is underway:
-              // ONLY ACCUMULATE AND ADVANCE PROGRESS IF FACE IS PROPERLY IN FRAME!
-              if (isScanningRef.current) {
-                if (inFrameValid) {
-                  // Face is centered and not clipped
-                  lostFaceFramesRef.current = 0;
-                  setIsScanPaused(false);
-                  validScanFramesRef.current += 1;
-
-                  ratioSamplesRef.current.push(currentRatio);
-                  estWidthCmSamplesRef.current.push(estimatedWidthCm);
-                  estHeightCmSamplesRef.current.push(estimatedHeightCm);
-
-                  // Progress advances smoothly based on valid captured in-frame frames (40 frames ~ 1.4 seconds)
-                  const progress = Math.min(100, Math.round((validScanFramesRef.current / 40) * 100));
-                  setScanProgress(progress);
-
-                  if (progress >= 100 && validScanFramesRef.current >= 38) {
-                    finishScan();
-                  }
-                } else {
-                  // Face moved out of frame or got clipped during scanning!
-                  lostFaceFramesRef.current += 1;
-                  setIsScanPaused(true);
-
-                  // If missing or clipped for more than 90 frames (~3 seconds), cancel the scan
-                  if (lostFaceFramesRef.current > 90) {
-                    setIsScanning(false);
-                    isScanningRef.current = false;
-                    setIsScanPaused(false);
-                    setScanProgress(0);
-                    validScanFramesRef.current = 0;
-                    lostFaceFramesRef.current = 0;
-                    setIsAligning(true);
-                    isAligningRef.current = true;
-                    setAlignmentStatus('Scan cancelled: Face was out of frame');
-                    setIsWellPositioned(false);
-                  }
-                }
-              }
-
-              // --- DRAW OVERLAY VISUALIZATIONS ---
-              // 1. Biometric seal contour polygon
-              ctx.lineWidth = 1.5;
-              ctx.strokeStyle = inFrameValid ? 'rgba(174, 183, 132, 0.6)' : 'rgba(239, 68, 68, 0.6)';
-              ctx.fillStyle = inFrameValid ? 'rgba(174, 183, 132, 0.08)' : 'rgba(239, 68, 68, 0.08)';
-
-              ctx.beginPath();
-              ctx.moveTo(ptNose.x, ptNose.y);
-              ctx.lineTo(ptRight.x, ptRight.y);
-              ctx.lineTo(ptChin.x, ptChin.y);
-              ctx.lineTo(ptLeft.x, ptLeft.y);
-              ctx.closePath();
-              ctx.fill();
-              ctx.stroke();
-
-              // 2. Dashed vector lines
-              ctx.setLineDash([5, 5]);
-              ctx.lineWidth = 2;
-              ctx.strokeStyle = inFrameValid ? 'rgba(174, 183, 132, 0.85)' : 'rgba(239, 68, 68, 0.85)';
-
-              // Jaw width line
-              ctx.beginPath();
-              ctx.moveTo(ptLeft.x, ptLeft.y);
-              ctx.lineTo(ptRight.x, ptRight.y);
-              ctx.stroke();
-
-              // Height line
-              ctx.beginPath();
-              ctx.moveTo(ptNose.x, ptNose.y);
-              ctx.lineTo(ptChin.x, ptChin.y);
-              ctx.stroke();
-              ctx.setLineDash([]);
-
-              // 3. Highlight Key Biometric Anchor Points
-              KEY_LANDMARK_INDICES.forEach((idx) => {
-                const pt = landmarks[idx];
-                if (!pt) return;
-                const px = pt.x * canvas.width;
-                const py = pt.y * canvas.height;
-
-                ctx.beginPath();
-                ctx.arc(px, py, 6, 0, 2 * Math.PI);
-                ctx.fillStyle = inFrameValid ? 'rgba(174, 183, 132, 0.35)' : 'rgba(239, 68, 68, 0.35)';
-                ctx.fill();
-
-                ctx.beginPath();
-                ctx.arc(px, py, 2.5, 0, 2 * Math.PI);
-                ctx.fillStyle = inFrameValid ? '#AEB784' : '#EF4444';
-                ctx.fill();
-              });
-
-              // 4. Draw bounding box if actively scanning
-              if (isScanningRef.current) {
-                const pxXs = landmarks.map((l: any) => l.x * canvas.width);
-                const pxYs = landmarks.map((l: any) => l.y * canvas.height);
-                const bMinX = Math.min(...pxXs);
-                const bMaxX = Math.max(...pxXs);
-                const bMinY = Math.min(...pxYs);
-                const bMaxY = Math.max(...pxYs);
-
-                ctx.strokeStyle = inFrameValid ? 'rgba(174, 183, 132, 0.9)' : 'rgba(239, 68, 68, 0.9)';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([8, 8]);
-                ctx.strokeRect(bMinX - 16, bMinY - 16, bMaxX - bMinX + 32, bMaxY - bMinY + 32);
-                ctx.setLineDash([]);
-              }
-
-              // --- POSITIONING & ALIGNMENT GUIDANCE ---
-              if (isAligningRef.current && !isScanningRef.current) {
-                if (!inFrameValid) {
-                  setAlignmentStatus(frameWarning || 'Align your face in the oval');
-                  setIsWellPositioned(false);
-                  holdStillTimerRef.current = null;
-                  setHoldStillCountdown(null);
-                } else {
-                  setAlignmentStatus('Hold still');
-                  setIsWellPositioned(true);
-
-                  if (!holdStillTimerRef.current) {
-                    holdStillTimerRef.current = performance.now();
-                    setHoldStillCountdown(1);
-                  } else if (performance.now() - holdStillTimerRef.current > 900) {
-                    holdStillTimerRef.current = null;
-                    setHoldStillCountdown(null);
-                    setIsAligning(false);
-                    isAligningRef.current = false;
-                    startScanningSequence();
-                  }
-                }
-              }
-            } else {
-              // NO FACE DETECTED AT ALL
-              setIsFaceInFrame(false);
-              isFaceInFrameRef.current = false;
-              setFaceFrameWarning('No face detected in camera');
-
-              if (isScanningRef.current) {
-                // Face vanished during active scanning: pause and increment lost counter
-                lostFaceFramesRef.current += 1;
-                setIsScanPaused(true);
-
-                if (lostFaceFramesRef.current > 90) { // ~3 seconds of missing face
-                  setIsScanning(false);
-                  isScanningRef.current = false;
-                  setIsScanPaused(false);
-                  setScanProgress(0);
-                  validScanFramesRef.current = 0;
-                  lostFaceFramesRef.current = 0;
-                  setIsAligning(true);
-                  isAligningRef.current = true;
-                  setAlignmentStatus('Scan cancelled: Face was out of frame');
-                  setIsWellPositioned(false);
-                }
-              } else if (isAligningRef.current) {
-                setAlignmentStatus('No face detected');
-                setIsWellPositioned(false);
-                holdStillTimerRef.current = null;
-                setHoldStillCountdown(null);
-              }
+            } catch (err) {
+              console.warn('Detection iteration note:', err);
             }
           }
         }
       }
 
-      animFrameIdRef.current = requestAnimationFrame(processFrame);
+      animFrameIdRef.current = requestAnimationFrame(render);
     };
 
-    animFrameIdRef.current = requestAnimationFrame(processFrame);
-
-    return () => {
-      isRunning = false;
-      if (animFrameIdRef.current) {
-        cancelAnimationFrame(animFrameIdRef.current);
-      }
-    };
-  }, [isCameraReady, isAiLoaded, isDemoMode]);
-
-  // Sync ref
-  useEffect(() => {
-    isScanningRef.current = isScanning;
+    animFrameIdRef.current = requestAnimationFrame(render);
   }, [isScanning]);
 
-  useEffect(() => {
-    isAligningRef.current = isAligning;
-  }, [isAligning]);
+  // Draw Biometric Points and Guidance Overlay
+  const drawFacialOverlay = (
+    ctx: CanvasRenderingContext2D,
+    w: number,
+    h: number,
+    landmarks: Record<number, { x: number; y: number }>,
+    isValid: boolean
+  ) => {
+    const strokeColor = isValid ? 'rgba(99, 112, 77, 0.85)' : 'rgba(194, 132, 50, 0.85)';
+    const pointColor = isValid ? '#63704D' : '#C28432';
 
-  // 4. Initiate Alignment and Scanning
-  const handleStartScanButton = () => {
-    if (isDemoMode) {
-      runDemoSimulation(demoTargetSize);
-      return;
-    }
+    ctx.save();
+    ctx.strokeStyle = strokeColor;
+    ctx.fillStyle = pointColor;
+    ctx.lineWidth = 1.5;
 
-    // STRICT CHECK: Do not scan if face is out of frame
-    if (!isFaceInFrameRef.current) {
-      setIsAligning(true);
-      isAligningRef.current = true;
-      setAlignmentStatus(faceFrameWarning || 'Position your face fully inside the oval guide first');
-      setIsWellPositioned(false);
-      return;
-    }
+    // Draw key contour connections: Jawline (234 -> 152 -> 454)
+    const jawIndices = [234, 127, 50, 152, 280, 356, 454];
+    ctx.beginPath();
+    jawIndices.forEach((idx, i) => {
+      const p = landmarks[idx];
+      if (p) {
+        const px = p.x * w;
+        const py = p.y * h;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+    });
+    ctx.stroke();
 
-    setRecommendedSize(null);
-    setBiometrics(null);
-    setSelectedStyleId(null);
-    setIsOrderPlaced(false);
-    setCurrentScanRecord(null);
-    setIsAligning(true);
-    isAligningRef.current = true;
-    setAlignmentStatus('Hold still');
-    setIsWellPositioned(true);
-    holdStillTimerRef.current = performance.now();
-    setHoldStillCountdown(1);
+    // Draw key anchors
+    const keyAnchors = [168, 152, 234, 454, 33, 133, 263, 362, 4];
+    keyAnchors.forEach((idx) => {
+      const p = landmarks[idx];
+      if (p) {
+        ctx.beginPath();
+        ctx.arc(p.x * w, p.y * h, 3, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    });
+
+    ctx.restore();
   };
 
-  const startScanningSequence = () => {
-    setIsScanning(true);
-    isScanningRef.current = true;
-    setIsScanPaused(false);
-    setScanProgress(0);
-    validScanFramesRef.current = 0;
-    lostFaceFramesRef.current = 0;
-    ratioSamplesRef.current = [];
-    estWidthCmSamplesRef.current = [];
-    estHeightCmSamplesRef.current = [];
-  };
-
-  const finishScan = () => {
+  // Complete Multi-Frame Analysis & Run Model Inference
+  const completeScan = async (frames: ExtractedFrameFeatures[], isDemo: boolean) => {
     setIsScanning(false);
-    isScanningRef.current = false;
-    setIsScanPaused(false);
+    const metrics = calculateStabilityMetrics(frames);
+    const inference = await runLocalModelInference(metrics.meanFeatureVector);
 
-    // Guard: ensure we actually collected genuine in-frame frames
-    if (estWidthCmSamplesRef.current.length < 10 && !isDemoMode) {
-      setIsAligning(true);
-      isAligningRef.current = true;
-      setAlignmentStatus('Scan incomplete: Face moved out of frame. Please try again.');
-      setIsWellPositioned(false);
-      return;
-    }
+    const result = {
+      metrics,
+      inference,
+      isDemoSimulation: isDemo,
+    };
 
-    // Aggregate accumulated biometrics
-    let finalMeasurements = lastValidMeasurementsRef.current;
+    setScanResult(result);
 
-    if (ratioSamplesRef.current.length > 0) {
-      const sortedRatios = [...ratioSamplesRef.current].sort((a, b) => a - b);
-      const medianRatio = sortedRatios[Math.floor(sortedRatios.length / 2)];
+    // Provide parent callback
+    const avgJaw = metrics.jawWidth.mean;
+    const avgHeight = metrics.faceHeight.mean;
 
-      const sortedWidths = [...estWidthCmSamplesRef.current].sort((a, b) => a - b);
-      const medianWidth = sortedWidths[Math.floor(sortedWidths.length / 2)] || 13.1;
-
-      const sortedHeights = [...estHeightCmSamplesRef.current].sort((a, b) => a - b);
-      const medianHeight = sortedHeights[Math.floor(sortedHeights.length / 2)] || 11.8;
-
-      const avgWidthPx =
-        widthSamplesRef.current.length > 0
-          ? widthSamplesRef.current.reduce((a, b) => a + b, 0) / widthSamplesRef.current.length
-          : 310;
-      const avgHeightPx =
-        heightSamplesRef.current.length > 0
-          ? heightSamplesRef.current.reduce((a, b) => a + b, 0) / heightSamplesRef.current.length
-          : 255;
-
-      finalMeasurements = {
-        width: avgWidthPx,
-        height: avgHeightPx,
-        ratio: Number(medianRatio.toFixed(2)),
-        estimatedWidthCm: medianWidth,
-        estimatedHeightCm: medianHeight,
-        confidence: 0.985
-      };
-    } else if (!finalMeasurements) {
-      finalMeasurements = generateSimulatedFaceMeasurements(demoTargetSize);
-    }
-
-    const calculatedSize = computeMaskSizeFromBiometrics(finalMeasurements);
-    setBiometrics(finalMeasurements);
-    setRecommendedSize(calculatedSize);
-    setSelectedSize(calculatedSize); // Default the user selection to the AI recommendation
-    setSelectedStyleId(MASK_STYLES[0].id); // Pre-select the everyday mask for convenience
-
-    // --- PERSISTENCE: SAVE TO LOCAL STORAGE & SYNC TO CLOUD SQL (30-DAY RETENTION) ---
-    const activeUser = username.trim() || 'Ronit';
-    const localRecord = saveLocalFaceScan({
-      username: activeUser,
-      recommendedSize: calculatedSize,
-      jawWidthCm: finalMeasurements.estimatedWidthCm,
-      faceHeightCm: finalMeasurements.estimatedHeightCm,
-      jawWidthPx: Math.round(finalMeasurements.width),
-      faceHeightPx: Math.round(finalMeasurements.height),
-      facialRatio: finalMeasurements.ratio,
-      confidence: finalMeasurements.confidence,
-      notes: scanNotes.trim() || undefined,
+    onScanComplete({
+      measurements: {
+        jawWidth: avgJaw,
+        faceHeight: avgHeight,
+        referenceInterEyeDistanceCm: REFERENCE_INTER_EYE_CM,
+      },
+      prediction: {
+        predictedSize: inference.predictedSize,
+        confidence: inference.confidence,
+        probabilities: inference.probabilities,
+        scanQuality: metrics.scanQuality,
+        coefficientOfVariation: metrics.jawWidth.cvPercent,
+        isDemoSimulation: isDemo,
+      },
     });
 
-    setCurrentScanRecord(localRecord);
-
-    // Sync to Cloud SQL in background
-    syncScanToCloud(localRecord).then((synced) => {
-      setCurrentScanRecord({ ...synced });
-    });
+    // Save to server database / local guest storage
+    persistScan(result, avgJaw, avgHeight);
   };
 
-  // Demo Simulation for testing without webcam - supports Small, Medium, Large
-  const runDemoSimulation = (targetSize: MaskSize = demoTargetSize) => {
-    setRecommendedSize(null);
-    setBiometrics(null);
-    setSelectedStyleId(null);
-    setIsOrderPlaced(false);
-    setCurrentScanRecord(null);
-    setIsAligning(true);
-    setAlignmentStatus('Hold still');
-    setIsWellPositioned(true);
+  // Persist Scan Record
+  const persistScan = async (
+    result: { metrics: MultiFrameStabilityMetrics; inference: ModelInferenceResult; isDemoSimulation: boolean },
+    jawWidthCm: number,
+    faceHeightCm: number
+  ) => {
+    setSavingScan(true);
+    const payload = {
+      userId,
+      userName,
+      jawWidthCm,
+      faceHeightCm,
+      referenceInterEyeCm: REFERENCE_INTER_EYE_CM,
+      recommendedSize: result.inference.predictedSize,
+      confidence: result.inference.confidence,
+      scanQuality: result.metrics.scanQuality,
+      probabilities: result.inference.probabilities,
+      headPose: currentPose,
+      stabilityMetrics: {
+        sampleCount: result.metrics.sampleCount,
+        acceptedCount: result.metrics.acceptedCount,
+        rejectedCount: result.metrics.rejectedCount,
+        jawCvPercent: result.metrics.jawWidth.cvPercent,
+        heightCvPercent: result.metrics.faceHeight.cvPercent,
+        stabilityScore: result.metrics.overallStabilityScore,
+      },
+      normalizedFeatures: result.metrics.meanFeatureVector,
+      isDemoSimulation: result.isDemoSimulation,
+    };
 
-    setTimeout(() => {
-      setIsAligning(false);
-      setIsScanning(true);
-      setScanProgress(0);
-
-      const interval = setInterval(() => {
-        setScanProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(interval);
-            setIsScanning(false);
-            const sim = generateSimulatedFaceMeasurements(targetSize);
-            setBiometrics(sim);
-            const simSize = computeMaskSizeFromBiometrics(sim);
-            setRecommendedSize(simSize);
-            setSelectedSize(simSize);
-            setSelectedStyleId(MASK_STYLES[0].id);
-
-            // Save to Local Storage & sync
-            const activeUser = username.trim() || 'Ronit';
-            const localRecord = saveLocalFaceScan({
-              username: activeUser,
-              recommendedSize: simSize,
-              jawWidthCm: sim.estimatedWidthCm,
-              faceHeightCm: sim.estimatedHeightCm,
-              jawWidthPx: Math.round(sim.width),
-              faceHeightPx: Math.round(sim.height),
-              facialRatio: sim.ratio,
-              confidence: sim.confidence,
-              notes: scanNotes.trim() || `Demo simulation test (${targetSize})`,
-            });
-            setCurrentScanRecord(localRecord);
-            syncScanToCloud(localRecord).then((synced) => {
-              setCurrentScanRecord({ ...synced });
-            });
-
-            return 100;
-          }
-          return prev + 5;
-        });
-      }, 40);
-    }, 700);
-  };
-
-  // 5. Order Placement
-  const handlePlaceOrder = () => {
-    if (!selectedStyleId || !recommendedSize) return;
+    // Save in local storage immediately
+    saveGuestScan({ ...payload, id: `local_${Date.now()}`, createdAt: new Date().toISOString() });
 
     try {
-      confetti({
-        particleCount: 80,
-        spread: 60,
-        origin: { y: 0.65 },
-        colors: ['#aeb784', '#5a5c27', '#e3dbbb', '#ffffff']
+      const res = await fetch('/api/scans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
       });
-    } catch {}
-
-    setIsOrderPlaced(true);
-
-    // Update stored record with selected style
-    if (currentScanRecord) {
-      const mask = MASK_STYLES.find((m) => m.id === selectedStyleId);
-      if (mask) {
-        currentScanRecord.selectedMaskStyle = mask.name;
+      if (res.ok) {
+        const data = await res.json();
+        if (data.scan?.id) {
+          setSavedScanId(data.scan.id);
+        }
       }
+    } catch (e) {
+      console.warn('Background scan sync note:', e);
+    } finally {
+      setSavingScan(false);
     }
   };
 
-  const resetAll = () => {
-    setRecommendedSize(null);
-    setBiometrics(null);
-    setSelectedStyleId(null);
-    setIsOrderPlaced(false);
-    setIsScanning(false);
-    setIsAligning(false);
-    setScanProgress(0);
-    setCurrentScanRecord(null);
-    holdStillTimerRef.current = null;
-    setHoldStillCountdown(null);
+  // Explicit Synthetic Demo Simulation (watermarked)
+  const runDemoSimulation = async (profileType: 'Small' | 'Medium' | 'Large' | 'random' = 'random') => {
+    setIsDemoMode(true);
+    setCameraState('active');
+    setIsScanning(true);
+    setCapturedFrames([]);
+
+    // Determine target profile
+    let targetProfile: 'Small' | 'Medium' | 'Large' = 'Medium';
+    if (profileType === 'random') {
+      const types: ('Small' | 'Medium' | 'Large')[] = ['Small', 'Medium', 'Large'];
+      targetProfile = types[Math.floor(Math.random() * types.length)];
+    } else {
+      targetProfile = profileType;
+    }
+
+    let baseJaw = 13.2;
+    let baseHeight = 11.9;
+    let baseJawNorm = 2.08;
+    let baseHeightNorm = 1.88;
+
+    if (targetProfile === 'Small') {
+      baseJaw = 11.4;
+      baseHeight = 10.6;
+      baseJawNorm = 1.80;
+      baseHeightNorm = 1.67;
+    } else if (targetProfile === 'Large') {
+      baseJaw = 14.8;
+      baseHeight = 13.2;
+      baseJawNorm = 2.32;
+      baseHeightNorm = 2.09;
+    }
+
+    const demoFrames: ExtractedFrameFeatures[] = [];
+
+    for (let i = 0; i < TARGET_FRAME_COUNT; i++) {
+      await new Promise((r) => setTimeout(r, 40));
+      const jitterJaw = baseJaw + Math.sin(i * 0.45) * 0.14;
+      const jitterHeight = baseHeight + Math.cos(i * 0.45) * 0.11;
+      const aspect = jitterJaw / jitterHeight;
+
+      const liveJaw = parseFloat(jitterJaw.toFixed(1));
+      const liveHeight = parseFloat(jitterHeight.toFixed(1));
+      const liveAspect = parseFloat(aspect.toFixed(2));
+
+      setLiveMeasurements({
+        jawWidthCm: liveJaw,
+        faceHeightCm: liveHeight,
+        aspectRatio: liveAspect,
+      });
+
+      const f: ExtractedFrameFeatures = {
+        featureVector: [
+          parseFloat((baseJawNorm + Math.sin(i * 0.3) * 0.015).toFixed(4)),
+          parseFloat((baseHeightNorm + Math.cos(i * 0.3) * 0.012).toFixed(4)),
+          parseFloat((baseJawNorm * 1.05).toFixed(4)),
+          parseFloat((baseJawNorm * 0.92).toFixed(4)),
+          parseFloat((baseJawNorm * 0.82).toFixed(4)),
+          0.72, 0.54, 1.58, 0.15,
+          liveAspect,
+          0.95, 0.86, 0.38,
+          parseFloat((Math.sin(i * 0.2) * 1.5).toFixed(1)),
+          parseFloat((Math.cos(i * 0.2) * 1.2).toFixed(1)),
+          0.4,
+        ],
+        featureMap: {},
+        headPose: {
+          yawDeg: parseFloat((Math.sin(i * 0.2) * 1.5).toFixed(1)),
+          pitchDeg: parseFloat((Math.cos(i * 0.2) * 1.2).toFixed(1)),
+          rollDeg: 0.4,
+          isValidPose: true,
+          guidanceMessage: `Simulating ${targetProfile} profile • Sampling frame buffer`,
+        },
+        estimatedMeasurements: {
+          jawWidthCm: liveJaw,
+          faceHeightCm: liveHeight,
+          faceWidthCm: parseFloat((liveJaw * 1.06).toFixed(1)),
+          chinToNoseCm: parseFloat((liveHeight * 0.45).toFixed(1)),
+          interEyeReferenceCm: REFERENCE_INTER_EYE_CM,
+          aspectRatio: liveAspect,
+        },
+        isValidForAggregation: true,
+      };
+
+      demoFrames.push(f);
+      setCapturedFrames([...demoFrames]);
+    }
+
+    completeScan(demoFrames, true);
   };
 
-  const selectedMask = MASK_STYLES.find((m) => m.id === selectedStyleId);
+  const handleResetScan = () => {
+    setScanResult(null);
+    setCapturedFrames([]);
+    setSavedScanId(null);
+    if (cameraState === 'active' && !isDemoMode) {
+      setIsScanning(false);
+    } else {
+      startCamera();
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-olive-dark text-cream relative overflow-hidden flex flex-col font-sans select-none">
-      {/* Top Header */}
-      <header className="absolute top-0 left-0 right-0 p-3 sm:p-4 md:p-6 z-50 flex justify-between items-center max-w-7xl mx-auto w-full gap-2">
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          {onGoHome ? (
-            <button
-              type="button"
-              id="scanner-btn-home"
-              onClick={onGoHome}
-              className="flex items-center gap-1.5 text-cream/80 hover:text-cream transition-colors bg-black/30 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full border border-white/10 hover:border-white/20 text-xs sm:text-sm font-medium cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden xs:inline">Home</span>
-            </button>
-          ) : (
-            <Link
-              href="/"
-              id="scanner-btn-home-link"
-              className="flex items-center gap-1.5 text-cream/80 hover:text-cream transition-colors bg-black/30 backdrop-blur-md px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-full border border-white/10 hover:border-white/20 text-xs sm:text-sm font-medium cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span className="hidden xs:inline">Home</span>
-            </Link>
-          )}
-
-          <div className="flex items-center gap-1.5 sm:gap-2 font-bold text-xs sm:text-base md:text-lg tracking-tight bg-black/30 backdrop-blur-md px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-full border border-white/10">
-            <ScanFace className="w-4 h-4 sm:w-5 sm:h-5 text-sage shrink-0" />
-            <span className="hidden sm:inline">Neurovox AI</span>
-            <span className="sm:hidden font-mono text-xs">NV</span>
+    <div className="w-full max-w-5xl mx-auto space-y-6">
+      {/* Top Action Bar: Model Architecture & Dataset Links */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-2xl bg-white/75 border border-[#DCD6C8] shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-xl bg-[#4E5B31] text-white">
+            <Layers className="w-5 h-5" />
           </div>
-
-          {/* Quick Username indicator */}
-          <div className="hidden md:flex items-center gap-1.5 bg-black/30 backdrop-blur-md px-3 py-2 rounded-full border border-white/10 text-xs">
-            <User className="w-3.5 h-3.5 text-sage" />
-            <input
-              type="text"
-              id="scanner-username-input"
-              value={username}
-              onChange={(e) => handleUsernameChange(e.target.value)}
-              placeholder="Username"
-              className="bg-transparent border-none focus:outline-none text-cream w-20 sm:w-28 font-medium placeholder:text-cream/40"
-              title="Click to edit username for scan tracking"
-            />
+          <div>
+            <h1 className="text-base font-bold text-[#2E3019]">
+              AI-Assisted Facial Analysis & Sizing Engine
+            </h1>
+            <p className="text-xs text-[#5D6346]">
+              35-frame multi-sample stability analysis • Scale-calibrated via inter-eye reference distance
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 flex-wrap justify-end">
-          {/* Store Access Button */}
-          {onOpenStore && (
-            <button
-              type="button"
-              id="scanner-btn-store"
-              onClick={onOpenStore}
-              className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-medium border bg-black/30 border-white/10 text-cream/80 hover:text-sage hover:border-sage/40 transition-colors backdrop-blur-md cursor-pointer"
-              title="Browse Mask Store"
-            >
-              <ShoppingBag className="w-3.5 h-3.5 text-sage" />
-              <span className="hidden sm:inline">Store</span>
-            </button>
-          )}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowEvaluationModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-[#EAE5D8] hover:bg-[#DCD6C8] text-[#2E3019] transition-colors border border-[#C4BDB0]"
+          >
+            <BarChart2 className="w-3.5 h-3.5 text-[#4E5B31]" />
+            <span>AI Model Evaluation</span>
+          </button>
 
-          {/* Scan History Button */}
-          {onOpenHistory && (
-            <button
-              type="button"
-              id="scanner-btn-history"
-              onClick={onOpenHistory}
-              className="flex items-center gap-1 sm:gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-medium border bg-black/30 border-white/10 text-cream/80 hover:text-sage hover:border-sage/40 transition-colors backdrop-blur-md cursor-pointer"
-              title="View Historical Size Recommendations"
-            >
-              <History className="w-3.5 h-3.5 text-sage" />
-              <span className="hidden sm:inline">History</span>
-            </button>
-          )}
+          <button
+            onClick={() => setShowCollectorModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-[#EAE5D8] hover:bg-[#DCD6C8] text-[#2E3019] transition-colors border border-[#C4BDB0]"
+          >
+            <Database className="w-3.5 h-3.5 text-[#4E5B31]" />
+            <span>Dataset Collector</span>
+          </button>
+        </div>
+      </div>
 
-          {/* Demo Mode Toggle & Size Selector */}
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              id="scanner-btn-demo-toggle"
-              onClick={() => {
-                const nextMode = !isDemoMode;
-                setIsDemoMode(nextMode);
-                resetAll();
-                if (nextMode) {
-                  setErrorMessage(null);
-                }
-              }}
-              className={cn(
-                'flex items-center gap-1 px-2.5 py-1.5 sm:px-3 sm:py-1.5 rounded-full text-xs font-medium border transition-colors backdrop-blur-md cursor-pointer',
-                isDemoMode
-                  ? 'bg-sage/20 border-sage text-sage'
-                  : 'bg-black/30 border-white/10 text-cream/70 hover:text-cream'
-              )}
-              title="Toggle Demo Simulation (usable without webcam)"
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              <span className="text-[11px] font-semibold">{isDemoMode ? 'Demo' : 'Demo'}</span>
-            </button>
+      {/* Main Scanner Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* Viewport / Video Area (7 Columns) */}
+        <div className="lg:col-span-7 flex flex-col items-center">
+          <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-[#1E2018] shadow-lg border border-[#DCD6C8] flex items-center justify-center">
+            {/* Real Video & Overlay Canvas */}
+            <video
+              ref={videoRef}
+              playsInline
+              muted
+              className={`absolute inset-0 w-full h-full object-cover transform -scale-x-100 ${
+                cameraState === 'active' && !isDemoMode ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}
+            />
+            <canvas
+              ref={canvasRef}
+              className={`absolute inset-0 w-full h-full object-cover transform -scale-x-100 ${
+                cameraState === 'active' && !isDemoMode ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}
+            />
 
-            {isDemoMode && (
-              <div className="flex items-center bg-black/40 backdrop-blur-md p-0.5 rounded-full border border-white/15 text-xs">
-                {(['Small', 'Medium', 'Large'] as MaskSize[]).map((sz) => (
+            {/* Inactive or Initializing State */}
+            {cameraState !== 'active' && (
+              <div className="p-8 text-center text-white/90 space-y-4 max-w-sm">
+                <div className="w-16 h-16 mx-auto rounded-full bg-white/10 flex items-center justify-center text-white">
+                  <Camera className="w-8 h-8" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Facial Scan Initialization</h3>
+                  <p className="text-xs text-white/70 mt-1">
+                    Grant camera permission for live MediaPipe facial landmark tracking and head-pose analysis.
+                  </p>
+                </div>
+
+                <div className="space-y-2 pt-2">
                   <button
-                    key={sz}
-                    type="button"
-                    id={`demo-select-${sz.toLowerCase()}`}
-                    onClick={() => {
-                      setDemoTargetSize(sz);
-                      runDemoSimulation(sz);
-                    }}
-                    className={cn(
-                      'px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full text-[10px] sm:text-[11px] font-semibold transition-all cursor-pointer',
-                      demoTargetSize === sz
-                        ? 'bg-sage text-olive-dark font-bold shadow-xs'
-                        : 'text-cream/70 hover:text-cream'
-                    )}
-                    title={`Simulate ${sz} face scan`}
+                    onClick={startCamera}
+                    className="w-full py-2.5 px-4 text-xs font-bold rounded-xl bg-[#63704D] hover:bg-[#525E3E] text-white transition-all shadow-md flex items-center justify-center gap-2"
                   >
-                    {sz[0]}<span className="hidden xs:inline">{sz.slice(1)}</span>
+                    <Camera className="w-4 h-4" />
+                    <span>Enable Camera & Begin</span>
                   </button>
-                ))}
+
+                  <div className="space-y-1.5 pt-1">
+                    <button
+                      onClick={() => runDemoSimulation('random')}
+                      className="w-full py-2.5 px-4 text-xs font-semibold rounded-xl bg-white/10 hover:bg-white/20 text-white transition-all border border-white/20 flex items-center justify-center gap-2"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>Run Dynamic Simulation (Random)</span>
+                    </button>
+                    <div className="grid grid-cols-3 gap-1.5 pt-1">
+                      <button
+                        onClick={() => runDemoSimulation('Small')}
+                        className="py-1 px-2 text-[11px] font-medium rounded-lg bg-white/5 hover:bg-white/15 text-white/90 border border-white/10 transition-colors"
+                        title="Simulate Small / Petite Face"
+                      >
+                        Petite (S)
+                      </button>
+                      <button
+                        onClick={() => runDemoSimulation('Medium')}
+                        className="py-1 px-2 text-[11px] font-medium rounded-lg bg-white/5 hover:bg-white/15 text-white/90 border border-white/10 transition-colors"
+                        title="Simulate Medium / Standard Face"
+                      >
+                        Standard (M)
+                      </button>
+                      <button
+                        onClick={() => runDemoSimulation('Large')}
+                        className="py-1 px-2 text-[11px] font-medium rounded-lg bg-white/5 hover:bg-white/15 text-white/90 border border-white/10 transition-colors"
+                        title="Simulate Large / Broad Face"
+                      >
+                        Broad (L)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Active Mode Face Guide Wireframe */}
+            {cameraState === 'active' && (
+              <div className="absolute inset-0 pointer-events-none flex flex-col items-center justify-center">
+                {/* Oval Guide */}
+                <div
+                  className={`w-52 h-72 rounded-[48%] border-2 transition-colors duration-200 ${
+                    currentPose.isValidPose
+                      ? 'border-[#63704D]/70 shadow-[0_0_20px_rgba(99,112,77,0.3)]'
+                      : 'border-amber-500/80 shadow-[0_0_20px_rgba(194,132,50,0.4)]'
+                  }`}
+                />
+
+                {/* Top Status & Pose Pill */}
+                <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold backdrop-blur-md ${
+                        currentPose.isValidPose ? 'bg-[#63704D]/80 text-white' : 'bg-amber-600/80 text-white'
+                      }`}
+                    >
+                      <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                      {isScanning
+                        ? `Sampling: ${capturedFrames.length}/${TARGET_FRAME_COUNT}`
+                        : currentPose.isValidPose
+                        ? 'Pose Centered'
+                        : 'Adjust Angle'}
+                    </span>
+
+                    {isDemoMode && (
+                      <span className="px-2.5 py-1 rounded-full text-[11px] font-black uppercase tracking-wider bg-amber-400 text-amber-950 shadow-sm">
+                        Demo Simulation
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Head-Pose Angles */}
+                  <div className="flex items-center gap-1.5 text-[11px] font-mono text-white/90 bg-black/50 px-2.5 py-1 rounded-lg backdrop-blur-md">
+                    <span>Y: {currentPose.yawDeg > 0 ? `+${currentPose.yawDeg}` : currentPose.yawDeg}°</span>
+                    <span>P: {currentPose.pitchDeg > 0 ? `+${currentPose.pitchDeg}` : currentPose.pitchDeg}°</span>
+                    <span>R: {currentPose.rollDeg > 0 ? `+${currentPose.rollDeg}` : currentPose.rollDeg}°</span>
+                  </div>
+                </div>
+
+                {/* Guidance Banner */}
+                <div className="absolute bottom-4 left-4 right-4">
+                  <div className="px-4 py-2 rounded-xl bg-black/65 backdrop-blur-md text-white text-xs text-center border border-white/10 font-medium">
+                    {currentPose.guidanceMessage}
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
-          {/* Camera Switcher */}
-          {availableDevices.length > 1 && !isDemoMode && (
-            <button
-              type="button"
-              id="scanner-btn-camera-switch"
-              onClick={() => {
-                const currentIndex = availableDevices.findIndex((d) => d.deviceId === selectedDeviceId);
-                const nextIndex = (currentIndex + 1) % availableDevices.length;
-                setSelectedDeviceId(availableDevices[nextIndex].deviceId);
-              }}
-              className="p-2 rounded-full bg-black/30 backdrop-blur-md border border-white/10 text-cream/80 hover:text-cream cursor-pointer"
-              title="Switch Camera"
-            >
-              <RefreshCw className="w-4 h-4" />
-            </button>
-          )}
+          {/* Camera Controls Below Viewport */}
+          <div className="w-full flex items-center justify-between mt-3 px-1">
+            <div className="text-xs text-[#5D6346]">
+              Reference Distance: <strong>{REFERENCE_INTER_EYE_CM} cm</strong> inter-eye scaling
+            </div>
+
+            {cameraState === 'active' && !scanResult && (
+              <div className="flex items-center gap-2">
+                {!isScanning ? (
+                  <button
+                    onClick={() => {
+                      setCapturedFrames([]);
+                      setIsScanning(true);
+                    }}
+                    disabled={!currentPose.isValidPose}
+                    className="px-5 py-2 text-xs font-bold rounded-xl bg-[#4E5B31] text-white hover:bg-[#3E4924] disabled:opacity-50 transition-colors shadow-sm"
+                  >
+                    Start 35-Frame Capture
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setIsScanning(false)}
+                    className="px-4 py-2 text-xs font-semibold rounded-xl bg-red-800 text-white hover:bg-red-900 transition-colors"
+                  >
+                    Cancel Scan
+                  </button>
+                )}
+
+                <button
+                  onClick={stopCamera}
+                  className="px-3 py-2 text-xs font-medium rounded-xl bg-[#EAE5D8] hover:bg-[#DCD6C8] text-[#2E3019] transition-colors"
+                >
+                  Turn Off
+                </button>
+              </div>
+            )}
+          </div>
         </div>
-      </header>
 
-      {/* Main Viewport */}
-      <main className="flex-1 relative flex items-center justify-center p-2 sm:p-4 md:p-6 mt-16 sm:mt-14 md:mt-12">
-        {errorMessage && !isDemoMode ? (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="text-center space-y-4 p-8 bg-red-500/10 rounded-3xl border border-red-500/25 backdrop-blur-xl max-w-md w-full shadow-2xl"
-          >
-            <div className="w-14 h-14 bg-red-500/20 rounded-full flex items-center justify-center mx-auto text-red-400">
-              <AlertCircle className="w-7 h-7" />
-            </div>
-            <h2 className="text-xl font-bold text-red-100">Camera Notice</h2>
-            <p className="text-red-200/80 text-sm leading-relaxed">{errorMessage}</p>
+        {/* Real-time Diagnostics & Scan Results (5 Columns) */}
+        <div className="lg:col-span-5 space-y-4">
+          {!scanResult ? (
+            /* Live Diagnostics State */
+            <div className="p-6 rounded-2xl bg-white/80 border border-[#DCD6C8] shadow-sm space-y-5">
+              <div>
+                <h3 className="text-sm font-bold text-[#2E3019] uppercase tracking-wider text-[#7C8264]">
+                  Live Biometric Telemetry
+                </h3>
+                <p className="text-xs text-[#5D6346] mt-0.5">
+                  Extracted via MediaPipe Face Landmarker in real-time.
+                </p>
+              </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-2">
-              <button
-                type="button"
-                id="btn-retry-camera"
-                onClick={() => startCamera(selectedDeviceId)}
-                className="flex-1 px-4 py-2.5 bg-red-500/20 text-red-100 rounded-full hover:bg-red-500/30 transition-colors text-sm font-medium flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <RefreshCw className="w-4 h-4" />
-                Retry Camera
-              </button>
-              <button
-                type="button"
-                id="btn-error-demo-mode"
-                onClick={() => {
-                  setIsDemoMode(true);
-                  setErrorMessage(null);
-                }}
-                className="flex-1 px-4 py-2.5 bg-sage text-olive-dark rounded-full font-medium hover:bg-sage/90 transition-transform active:scale-95 text-sm cursor-pointer"
-              >
-                Try Demo Mode
-              </button>
-            </div>
-          </motion.div>
-        ) : (
-          <div
-            ref={containerRef}
-            className="relative w-full max-w-sm sm:max-w-xl md:max-w-4xl aspect-[3/4] sm:aspect-[4/3] md:aspect-[16/10] lg:aspect-video h-[66vh] max-h-[580px] sm:h-auto sm:max-h-none bg-black/60 rounded-3xl overflow-hidden shadow-2xl border border-white/15 flex items-center justify-center transition-all duration-300"
-          >
-            {/* Rule of Thirds subtle alignment grid */}
-            <div className="absolute inset-0 pointer-events-none z-10 opacity-15">
-              <div className="absolute top-1/3 left-0 w-full h-px bg-white" />
-              <div className="absolute top-2/3 left-0 w-full h-px bg-white" />
-              <div className="absolute top-0 left-1/3 w-px h-full bg-white" />
-              <div className="absolute top-0 left-2/3 w-px h-full bg-white" />
-            </div>
-
-            {/* Video stream with mirroring */}
-            {!isDemoMode ? (
-              <video
-                ref={videoRef}
-                className="absolute inset-0 w-full h-full object-cover -scale-x-100"
-                playsInline
-                muted
-                autoPlay
-              />
-            ) : (
-              <div className="absolute inset-0 w-full h-full bg-gradient-to-b from-[#2A2B11] to-[#1a1b0b] flex items-center justify-center">
-                <div className="relative flex flex-col items-center">
-                  <div className="w-48 h-60 rounded-[100%] border-2 border-dashed border-sage/40 flex items-center justify-center bg-sage/5">
-                    <ScanFace className="w-20 h-20 text-sage/40 animate-pulse" />
+              {/* Progress if scanning */}
+              {isScanning && (
+                <div className="space-y-1.5 p-3 rounded-xl bg-[#F5F2EA] border border-[#DCD6C8]">
+                  <div className="flex justify-between text-xs font-semibold text-[#2E3019]">
+                    <span>Multi-Frame Progress</span>
+                    <span>
+                      {Math.round((capturedFrames.length / TARGET_FRAME_COUNT) * 100)}% ({capturedFrames.length}/{TARGET_FRAME_COUNT})
+                    </span>
                   </div>
-                  <span className="mt-3 text-xs text-sage/70 font-mono tracking-wider">
-                    [DEMO MODE: SIMULATED BIOMETRIC FEED]
+                  <div className="w-full h-2 rounded-full bg-[#DCD6C8] overflow-hidden">
+                    <div
+                      className="h-full bg-[#4E5B31] transition-all duration-150"
+                      style={{ width: `${(capturedFrames.length / TARGET_FRAME_COUNT) * 100}%` }}
+                    />
+                  </div>
+                  <div className="text-[11px] text-[#7C8264]">
+                    Filtering invalid poses and checking landmark stability...
+                  </div>
+                </div>
+              )}
+
+              {/* Live Measurements Card */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-xl bg-[#F5F2EA] border border-[#DCD6C8]">
+                  <div className="text-[11px] font-semibold text-[#7C8264]">Estimated Jaw Span</div>
+                  <div className="text-xl font-black text-[#2E3019] mt-0.5">
+                    {liveMeasurements ? `${liveMeasurements.jawWidthCm} cm` : '—'}
+                  </div>
+                  <div className="text-[10px] text-[#7C8264]">Angle-calibrated</div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-[#F5F2EA] border border-[#DCD6C8]">
+                  <div className="text-[11px] font-semibold text-[#7C8264]">Estimated Face Height</div>
+                  <div className="text-xl font-black text-[#2E3019] mt-0.5">
+                    {liveMeasurements ? `${liveMeasurements.faceHeightCm} cm` : '—'}
+                  </div>
+                  <div className="text-[10px] text-[#7C8264]">Nasion to menton</div>
+                </div>
+              </div>
+
+              {/* Protocol Instructions */}
+              <div className="p-4 rounded-xl bg-[#F5F2EA] border border-[#DCD6C8] space-y-2 text-xs text-[#5D6346]">
+                <div className="font-bold text-[#2E3019] flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#4E5B31]" />
+                  <span>Scanning Protocol Guidelines</span>
+                </div>
+                <ul className="space-y-1 text-[11px] list-disc list-inside">
+                  <li>Hold device at natural eye level (30–50 cm distance).</li>
+                  <li>Maintain neutral facial expression with lips closed.</li>
+                  <li>Ensure even lighting across forehead and jawline.</li>
+                  <li>Remove eyeglasses or heavy facial accessories if possible.</li>
+                </ul>
+              </div>
+
+              {/* Demo Mode Trigger if Camera not active */}
+              {cameraState === 'idle' && (
+                <div className="p-4 rounded-xl bg-[#EAE5D8] border border-[#DCD6C8] text-center space-y-2">
+                  <div className="text-xs text-[#5D6346]">
+                    No camera available or testing in a virtualized container?
+                  </div>
+                  <button
+                    onClick={() => runDemoSimulation('random')}
+                    className="w-full py-2 px-3 text-xs font-semibold rounded-xl bg-white hover:bg-white/80 text-[#2E3019] border border-[#C4BDB0] transition-colors"
+                  >
+                    Launch Synthetic Biometric Simulation
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Completed Scan Results Card */
+            <div className="p-6 rounded-2xl bg-white border border-[#DCD6C8] shadow-md space-y-5 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-[#7C8264]">
+                    AI Analysis Result
+                  </span>
+                  <h3 className="text-xl font-black text-[#2E3019]">
+                    Recommended: Size {scanResult.inference.predictedSize}
+                  </h3>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-xs font-bold text-[#4E5B31]">
+                    {(scanResult.inference.confidence * 100).toFixed(1)}% Confidence
+                  </div>
+                  <div className="text-[11px] text-[#7C8264]">
+                    Softmax probability
+                  </div>
+                </div>
+              </div>
+
+              {/* Watermark badge if demo */}
+              {scanResult.isDemoSimulation && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+                  <span className="font-semibold">
+                    DEMO SIMULATION: Computed using synthetic landmark sequence for testing.
+                  </span>
+                </div>
+              )}
+
+              {/* Physical Dimension Estimates */}
+              <div className="p-4 rounded-xl bg-[#F5F2EA] border border-[#DCD6C8] space-y-3">
+                <div className="text-xs font-bold text-[#2E3019] flex justify-between items-center">
+                  <span>Aggregated Anthropometric Dimensions</span>
+                  <span className="text-[11px] font-normal text-[#5D6346]">
+                    N = {scanResult.metrics.acceptedCount} stable frames
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E0DACB]">
+                    <span className="text-[11px] text-[#7C8264] block">Jaw Span (Bizygomatic)</span>
+                    <span className="text-base font-bold text-[#2E3019]">
+                      {scanResult.metrics.jawWidth.mean} cm
+                    </span>
+                    <span className="text-[10px] text-[#7C8264] block">
+                      CV: {scanResult.metrics.jawWidth.cvPercent}%
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-white border border-[#E0DACB]">
+                    <span className="text-[11px] text-[#7C8264] block">Face Height (Nasion-Chin)</span>
+                    <span className="text-base font-bold text-[#2E3019]">
+                      {scanResult.metrics.faceHeight.mean} cm
+                    </span>
+                    <span className="text-[10px] text-[#7C8264] block">
+                      CV: {scanResult.metrics.faceHeight.cvPercent}%
+                    </span>
+                  </div>
+                </div>
+
+                {/* Quality & Engine Badges */}
+                <div className="flex flex-wrap items-center justify-between text-[11px] text-[#5D6346] pt-1">
+                  <span>
+                    Quality: <strong className="text-[#384323]">{scanResult.metrics.scanQuality}</strong> (Stability {scanResult.metrics.overallStabilityScore}/100)
+                  </span>
+                  <span>
+                    Inference: <strong>{scanResult.inference.inferenceLatencyMs} ms</strong> ({scanResult.inference.engine})
                   </span>
                 </div>
               </div>
-            )}
 
-            {/* Camera Initializing Prompt if waiting in iframe */}
-            {!isCameraReady && !isDemoMode && isAiLoaded && !errorMessage && (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center bg-black/60 backdrop-blur-xs">
-                <LoaderCircle className="w-10 h-10 text-sage animate-spin mb-3" />
-                <h3 className="text-base font-bold text-cream">Initializing Camera...</h3>
-                <p className="text-xs text-cream/70 max-w-sm mt-1 mb-4 leading-relaxed">
-                  Allow camera permission if prompted by your browser, or switch to Instant Demo Mode to test face sizing immediately.
-                </p>
-                <div className="flex flex-col sm:flex-row items-center gap-3">
+              {/* Class Probabilities Distribution */}
+              <div className="space-y-2">
+                <div className="text-xs font-semibold text-[#5D6346] flex justify-between">
+                  <span>Size Probability Distribution</span>
+                  <span>Model Softmax Outputs</span>
+                </div>
+
+                {(['Small', 'Medium', 'Large'] as MaskSize[]).map((size) => {
+                  const prob = scanResult.inference.probabilities[size] || 0;
+                  const isWinning = scanResult.inference.predictedSize === size;
+                  return (
+                    <div key={size} className="space-y-1">
+                      <div className="flex justify-between text-xs">
+                        <span className={isWinning ? 'font-bold text-[#2E3019]' : 'text-[#5D6346]'}>
+                          {size} {isWinning ? '★' : ''}
+                        </span>
+                        <span className="font-mono text-[11px] font-semibold text-[#2E3019]">
+                          {(prob * 100).toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-[#E0DACB] overflow-hidden">
+                        <div
+                          className={`h-full ${isWinning ? 'bg-[#4E5B31]' : 'bg-[#969C82]'}`}
+                          style={{ width: `${Math.max(4, prob * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Guidelines Fit Note */}
+              <div className="p-3 rounded-xl bg-[#EAE5D8] border border-[#DCD6C8] text-xs text-[#44482B]">
+                <strong>Fit Notes for {scanResult.inference.predictedSize}:</strong>{' '}
+                {MASK_SIZE_GUIDELINES[scanResult.inference.predictedSize]?.notes}
+              </div>
+
+              {/* CTA Action Buttons */}
+              <div className="space-y-2 pt-2">
+                {onNavigateToStore && (
                   <button
-                    type="button"
-                    id="btn-waiting-cam-demo"
-                    onClick={() => setIsDemoMode(true)}
-                    className="px-5 py-2.5 rounded-full bg-sage text-olive-dark font-bold text-sm hover:bg-sage/90 transition-all cursor-pointer flex items-center gap-2 shadow-lg"
+                    onClick={() => onNavigateToStore(scanResult.inference.predictedSize)}
+                    className="w-full py-3 px-4 rounded-xl bg-[#4E5B31] hover:bg-[#3E4924] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all"
                   >
-                    <Sliders className="w-4 h-4" />
-                    <span>Switch to Instant Demo Mode</span>
+                    <span>View Fitted Protective Masks in Store</span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
+                )}
+
+                <div className="grid grid-cols-2 gap-2">
                   <button
-                    type="button"
-                    id="btn-waiting-cam-retry"
-                    onClick={() => startCamera(selectedDeviceId)}
-                    className="px-4 py-2 rounded-full border border-white/20 text-xs text-cream/80 hover:text-cream cursor-pointer"
+                    onClick={handleResetScan}
+                    className="py-2.5 px-3 rounded-xl bg-[#EAE5D8] hover:bg-[#DCD6C8] text-[#2E3019] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
                   >
-                    Retry Camera
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Scan Again</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowCollectorModal(true)}
+                    className="py-2.5 px-3 rounded-xl bg-[#EAE5D8] hover:bg-[#DCD6C8] text-[#2E3019] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Database className="w-3.5 h-3.5" />
+                    <span>Contribute to Dataset</span>
                   </button>
                 </div>
               </div>
-            )}
 
-            {/* Biometric Landmarker Canvas */}
-            <canvas
-              ref={canvasRef}
-              className="absolute inset-0 w-full h-full object-cover -scale-x-100 pointer-events-none z-10"
-            />
-
-            {/* Loading AI models spinner with bypass option */}
-            <AnimatePresence>
-              {!isAiLoaded && !isDemoMode && (
-                <motion.div
-                  initial={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 bg-olive-dark/95 backdrop-blur-sm flex flex-col items-center justify-center z-30 p-6 text-center"
-                >
-                  <LoaderCircle className="w-12 h-12 text-sage animate-spin mb-4" />
-                  <p className="text-lg font-medium text-cream/90 animate-pulse">Initializing AI Models...</p>
-                  <p className="text-xs text-cream/50 mt-1 max-w-xs">Loading MediaPipe Face Landmark neural network</p>
-
-                  <div className="mt-6 flex flex-col sm:flex-row items-center gap-3">
-                    <button
-                      type="button"
-                      id="btn-skip-ai-demo"
-                      onClick={() => setIsDemoMode(true)}
-                      className="px-5 py-2.5 bg-sage text-olive-dark rounded-full font-bold text-sm hover:bg-sage/90 active:scale-95 transition-all shadow-lg cursor-pointer flex items-center gap-2"
-                    >
-                      <Sliders className="w-4 h-4" />
-                      <span>Use Instant Demo Mode</span>
-                    </button>
-                    {onGoHome && (
-                      <button
-                        type="button"
-                        id="btn-loading-go-home"
-                        onClick={onGoHome}
-                        className="px-4 py-2 text-xs text-cream/70 hover:text-cream transition-colors cursor-pointer"
-                      >
-                        Return Home
-                      </button>
-                    )}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Alignment Oval & Positioning Feedback Banner */}
-            <AnimatePresence>
-              {!recommendedSize && !isScanning && (isCameraReady || isDemoMode) && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 pointer-events-none z-20 flex flex-col items-center justify-center"
-                >
-                  <div
-                    className={cn(
-                      'w-48 h-64 xs:w-52 xs:h-70 sm:w-56 sm:h-72 md:w-60 md:h-76 lg:w-64 lg:h-80 rounded-[100%] border-2 transition-all duration-300 relative transform -translate-y-6 sm:translate-y-0',
-                      isAligning
-                        ? isWellPositioned
-                          ? 'border-green-400 bg-green-400/5 shadow-[0_0_20px_rgba(74,222,128,0.25)]'
-                          : 'border-red-400 bg-red-400/5'
-                        : isFaceInFrame || isDemoMode
-                          ? 'border-sage/60 bg-black/10'
-                          : 'border-red-400/70 bg-red-500/5'
-                    )}
-                  >
-                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-4 h-1 bg-sage/60 rounded-full" />
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-4 h-1 bg-sage/60 rounded-full" />
-                  </div>
-
-                  {/* Alignment guidance or out-of-frame warning banner */}
-                  {(isAligning || (!isFaceInFrame && !isDemoMode)) && (
-                    <motion.div
-                      initial={{ y: -10, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      className="absolute top-4 sm:top-8 bg-black/80 backdrop-blur-md px-3.5 py-1.5 sm:px-5 sm:py-2 rounded-full border border-white/15 flex items-center gap-2 max-w-xs sm:max-w-sm text-center shadow-lg z-30"
-                    >
-                      <div
-                        className={cn(
-                          'w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0',
-                          isWellPositioned ? 'bg-green-400 animate-ping' : 'bg-red-400'
-                        )}
-                      />
-                      <span
-                        className={cn(
-                          'font-medium text-xs sm:text-sm leading-tight',
-                          isWellPositioned ? 'text-green-400 font-semibold' : 'text-cream'
-                        )}
-                      >
-                        {isAligning ? alignmentStatus : faceFrameWarning || 'Position face inside the oval'}
-                      </span>
-                    </motion.div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Active Scanning Animation & Out-of-frame pause alert */}
-            <AnimatePresence>
-              {isScanning && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 pointer-events-none z-30 flex flex-col items-center justify-end pb-10"
-                >
-                  {/* Out of frame pause warning */}
-                  {isScanPaused && (
-                    <motion.div
-                      initial={{ scale: 0.9, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="absolute top-8 left-1/2 -translate-x-1/2 bg-red-600/90 text-white backdrop-blur-md px-5 py-2.5 rounded-full border border-red-400 shadow-xl flex items-center gap-2 z-40 text-xs sm:text-sm font-semibold animate-pulse pointer-events-auto"
-                    >
-                      <AlertTriangle className="w-4 h-4 text-white" />
-                      <span>{faceFrameWarning || 'Face out of frame — center your face to resume scan'}</span>
-                    </motion.div>
-                  )}
-
-                  <motion.div
-                    className={cn(
-                      'absolute left-0 right-0 h-1 transition-colors duration-200',
-                      isScanPaused
-                        ? 'bg-gradient-to-r from-transparent via-red-500 to-transparent shadow-[0_0_25px_rgba(239,68,68,0.95)]'
-                        : 'bg-gradient-to-r from-transparent via-sage to-transparent shadow-[0_0_25px_rgba(174,183,132,0.95)]'
-                    )}
-                    animate={{ top: ['5%', '90%', '5%'] }}
-                    transition={{ duration: 2.2, repeat: Infinity, ease: 'linear' }}
-                  />
-
-                  <div className="absolute top-6 left-6 w-12 h-12 border-t-2 border-l-2 border-sage/70 rounded-tl-xl" />
-                  <div className="absolute top-6 right-6 w-12 h-12 border-t-2 border-r-2 border-sage/70 rounded-tr-xl" />
-                  <div className="absolute bottom-6 left-6 w-12 h-12 border-b-2 border-l-2 border-sage/70 rounded-bl-xl" />
-                  <div className="absolute bottom-6 right-6 w-12 h-12 border-b-2 border-r-2 border-sage/70 rounded-br-xl" />
-
-                  <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 20, opacity: 0 }}
-                    className="bg-beige/95 backdrop-blur-xl px-7 py-4 rounded-2xl border border-white/30 shadow-2xl text-olive flex flex-col items-center gap-3 w-80 pointer-events-auto"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={cn(
-                          'w-2.5 h-2.5 rounded-full',
-                          isScanPaused ? 'bg-red-500' : 'bg-sage animate-ping'
-                        )}
-                      />
-                      <span className="font-semibold text-sm">
-                        {isScanPaused ? 'Scan paused — face out of frame' : 'Analyzing facial dimensions...'}
-                      </span>
-                    </div>
-
-                    <div className="w-full h-2 bg-olive/15 rounded-full overflow-hidden">
-                      <motion.div
-                        className={cn('h-full rounded-full', isScanPaused ? 'bg-red-400' : 'bg-sage')}
-                        style={{ width: `${scanProgress}%` }}
-                        transition={{ ease: 'linear', duration: 0.05 }}
-                      />
-                    </div>
-
-                    <div className="flex justify-between w-full text-xs text-olive-light font-mono font-medium">
-                      <span>{isScanPaused ? 'PAUSED' : 'MAPPING CONTOURS'}</span>
-                      <span>{scanProgress}%</span>
-                    </div>
-                  </motion.div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Results Modal with 3 Size Options (Small, Medium, Large) */}
-            <AnimatePresence>
-              {recommendedSize && !isScanning && (
-                <motion.div
-                  initial={{ opacity: 0, y: 30, scale: 0.96 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 30, scale: 0.96 }}
-                  transition={{ type: 'spring', stiffness: 320, damping: 26 }}
-                  className="absolute bottom-3 md:bottom-6 left-1/2 -translate-x-1/2 bg-[#F5F2EA] p-5 sm:p-6 rounded-3xl border border-[#DDD6C5] shadow-2xl text-[#2E3019] w-11/12 max-w-sm z-40 max-h-[85vh] overflow-y-auto space-y-4"
-                >
-                  {/* Top Biometric Metrics Table */}
-                  <div className="space-y-2 border-b border-[#DDD6C5] pb-3">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-[#5A5C27]">Jaw Width</span>
-                      <span className="font-bold text-[#2E3019] font-mono text-base">
-                        {Math.round(biometrics?.width || 245)}px
-                        <span className="text-xs text-[#5A5C27] font-sans font-normal ml-1.5">
-                          ({biometrics?.estimatedWidthCm || 13.1} cm)
-                        </span>
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-[#5A5C27]">Face Height</span>
-                      <span className="font-bold text-[#2E3019] font-mono text-base">
-                        {Math.round(biometrics?.height || 190)}px
-                        <span className="text-xs text-[#5A5C27] font-sans font-normal ml-1.5">
-                          ({biometrics?.estimatedHeightCm || 11.8} cm)
-                        </span>
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-[#5A5C27]">Facial Ratio</span>
-                      <span className="font-bold text-[#2E3019] font-mono text-base">
-                        {biometrics?.ratio?.toFixed(2) || '1.15'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Sizing Section with Small, Medium, Large Cards */}
-                  <div className="space-y-2.5">
-                    <div className="flex justify-between items-center">
-                      <h4 className="font-bold text-sm text-[#2E3019]">Size Selection</h4>
-                      <span className="text-[11px] font-bold text-[#3B401F] flex items-center gap-1 bg-[#AEB784]/20 px-2 py-0.5 rounded-full border border-[#AEB784]/40">
-                        <Sparkles className="w-3 h-3 text-[#3B401F]" /> AI Recommended: {recommendedSize}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      {MASK_SIZE_OPTIONS.map((opt) => {
-                        const isSelected = selectedSize === opt.size;
-                        const isAiMatch = recommendedSize === opt.size;
-
-                        return (
-                          <button
-                            key={opt.size}
-                            type="button"
-                            id={`btn-select-size-${opt.size.toLowerCase()}`}
-                            onClick={() => setSelectedSize(opt.size)}
-                            className={cn(
-                              'py-2.5 px-1.5 rounded-xl border text-center transition-all relative flex flex-col items-center justify-between cursor-pointer',
-                              isSelected
-                                ? 'border-[#3B401F] bg-[#3B401F] text-[#F5F2EA] font-bold shadow-md ring-2 ring-[#3B401F]/20'
-                                : 'border-[#DDD6C5] bg-[#EAE4D3]/60 hover:bg-[#EAE4D3] text-[#2E3019]'
-                            )}
-                          >
-                            {isAiMatch && (
-                              <span
-                                className={cn(
-                                  'text-[8px] uppercase tracking-wider font-extrabold px-1.5 py-0.5 rounded-full mb-1',
-                                  isSelected ? 'bg-[#AEB784] text-[#2E3019]' : 'bg-[#3B401F] text-[#F5F2EA]'
-                                )}
-                              >
-                                AI MATCH
-                              </span>
-                            )}
-                            <div className="text-xs font-bold">{opt.size}</div>
-                            <div
-                              className={cn(
-                                'text-[9px] mt-0.5 font-mono leading-tight',
-                                isSelected ? 'text-[#EAE4D3]/90' : 'text-[#5A5C27]'
-                              )}
-                            >
-                              {opt.widthRange}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Selected size details */}
-                    {(() => {
-                      const currentOpt = MASK_SIZE_OPTIONS.find((o) => o.size === selectedSize);
-                      if (!currentOpt) return null;
-                      return (
-                        <div className="p-2.5 rounded-xl bg-[#EAE4D3]/80 border border-[#DDD6C5] text-[11px] text-[#2E3019] space-y-1">
-                          <div className="font-semibold text-[#3B401F] flex items-center justify-between">
-                            <span>{currentOpt.name} ({currentOpt.size})</span>
-                            <span className="text-[10px] font-mono text-[#5A5C27] font-normal">{currentOpt.badge}</span>
-                          </div>
-                          <p className="text-[#5A5C27] leading-relaxed">{currentOpt.description}</p>
-                          <p className="text-[10px] text-[#2E3019]/85 italic pt-0.5">
-                            {selectedSize === recommendedSize
-                              ? '✨ Best airtight acoustic and protective seal for your facial scan.'
-                              : `Selected manually. AI matched Size ${recommendedSize} for your ${biometrics?.estimatedWidthCm || 13.1} cm jaw span.`}
-                          </p>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Select Style Section */}
-                  <div className="space-y-2">
-                    <h4 className="font-bold text-sm text-[#2E3019]">Select Style</h4>
-                    <div className="space-y-2">
-                      {MASK_STYLES.map((style) => {
-                        const isSelected = selectedStyleId === style.id;
-                        return (
-                          <button
-                            key={style.id}
-                            type="button"
-                            onClick={() => setSelectedStyleId(style.id)}
-                            className={cn(
-                              'w-full text-left px-3.5 py-2.5 rounded-2xl border transition-all text-xs flex items-center justify-between cursor-pointer',
-                              isSelected
-                                ? 'border-[#3B401F] bg-[#EAE4D3] font-bold text-[#2E3019] shadow-xs'
-                                : 'border-[#DDD6C5] bg-[#EAE4D3]/50 hover:bg-[#EAE4D3]/80 text-[#2E3019]'
-                            )}
-                          >
-                            <div className="font-semibold text-sm">{style.name}</div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-[#3B401F]">{style.price}</span>
-                              {isSelected && <Check className="w-4 h-4 text-[#3B401F]" />}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* Sticky Action Buttons */}
-                  <div className="space-y-2 pt-2 border-t border-[#DDD6C5]">
-                    <button
-                      type="button"
-                      id="btn-order-mask"
-                      disabled={!selectedStyleId}
-                      onClick={() => {
-                        if (selectedStyleId && selectedSize && biometrics && onProceedToStore) {
-                          onProceedToStore(selectedStyleId, selectedSize, biometrics);
-                        }
-                      }}
-                      className={cn(
-                        'w-full py-3.5 rounded-full font-bold transition-all text-sm shadow-sm flex items-center justify-center gap-2 cursor-pointer',
-                        selectedStyleId
-                          ? 'bg-[#3B401F] text-[#F5F2EA] hover:bg-[#2E3218] active:scale-[0.98]'
-                          : 'bg-[#DDD6C5]/70 text-[#5A5C27]/60 cursor-not-allowed'
-                      )}
-                    >
-                      <ShoppingBag className="w-4 h-4" />
-                      <span>
-                        {selectedStyleId
-                          ? `Order ${selectedMask?.name} · Size ${selectedSize}`
-                          : 'Select a mask to continue'}
-                      </span>
-                    </button>
-
-                    <div className="flex flex-col gap-1 text-center pt-1">
-                      <button
-                        type="button"
-                        id="btn-scan-again"
-                        onClick={resetAll}
-                        className="py-1.5 text-xs font-semibold text-[#3B401F] hover:underline cursor-pointer"
-                      >
-                        Scan Again
-                      </button>
-                      {onGoHome && (
-                        <button
-                          type="button"
-                          id="btn-scanner-goback"
-                          onClick={onGoHome}
-                          className="py-1 text-xs font-medium text-[#5A5C27] hover:text-[#2E3019] cursor-pointer"
-                        >
-                          Go Back
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-
-            {/* Bottom Shutter Capture Button with Out-of-Frame Gate */}
-            <div className="absolute bottom-3 sm:bottom-6 left-0 right-0 flex flex-col items-center justify-center z-30 pointer-events-none gap-2 px-3">
-              {!isScanning && !recommendedSize && (isCameraReady || isDemoMode) && (
-                <>
-                  {/* Status chip if face is not positioned properly */}
-                  {!isDemoMode && !isFaceInFrame && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="pointer-events-auto bg-black/85 backdrop-blur-md px-3.5 py-1 sm:px-4 sm:py-1.5 rounded-full border border-red-500/40 text-red-300 text-[11px] sm:text-xs flex items-center gap-1.5 shadow-lg max-w-[90%] text-center"
-                    >
-                      <ShieldAlert className="w-3.5 h-3.5 text-red-400 shrink-0" />
-                      <span>{faceFrameWarning || 'Position your face in the oval to enable scan'}</span>
-                    </motion.div>
-                  )}
-
-                  <motion.button
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    whileHover={{ scale: isDemoMode || isFaceInFrame ? 1.05 : 1 }}
-                    whileTap={{ scale: isDemoMode || isFaceInFrame ? 0.95 : 1 }}
-                    id="btn-shutter-capture"
-                    disabled={!isDemoMode && !isFaceInFrame}
-                    onClick={handleStartScanButton}
-                    className={cn(
-                      'pointer-events-auto group relative flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full shadow-2xl transition-all border border-white/20',
-                      isDemoMode || isFaceInFrame
-                        ? 'bg-sage text-olive-dark hover:bg-sage/95 cursor-pointer'
-                        : 'bg-sage/40 text-olive-dark/40 cursor-not-allowed opacity-60'
-                    )}
-                    title={
-                      isDemoMode || isFaceInFrame
-                        ? 'Capture & Start Face Scan'
-                        : 'Align face inside frame before scanning'
-                    }
-                  >
-                    <div className="absolute inset-1 sm:inset-1.5 border-2 border-olive-dark/25 rounded-full group-hover:scale-90 transition-transform" />
-                    <ScanFace className="w-7 h-7 sm:w-8 sm:h-8 text-olive-dark" />
-                  </motion.button>
-                </>
-              )}
+              {/* Data retention notice */}
+              <div className="text-[11px] text-[#7C8264] text-center">
+                Scan telemetry scheduled for 30-day automatic purge • Reference calibration: 6.3 cm
+              </div>
             </div>
-          </div>
-        )}
-      </main>
+          )}
+        </div>
+      </div>
+
+      {/* Model Evaluation Modal */}
+      <ModelEvaluationModal
+        isOpen={showEvaluationModal}
+        onClose={() => setShowEvaluationModal(false)}
+      />
+
+      {/* Dataset Collector Modal */}
+      <DatasetCollectorModal
+        isOpen={showCollectorModal}
+        onClose={() => setShowCollectorModal(false)}
+        collectedFrames={capturedFrames}
+      />
     </div>
   );
 }

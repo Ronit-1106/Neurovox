@@ -1,8 +1,10 @@
 {
   "name": "Neurovox",
-  "description": "AI-powered face scanning application for accurate mask sizing and custom fit recommendations.",
+  "description": "AI-assisted facial biometric analysis and protective mask sizing recommendation system.",
   "requestFramePermissions": [
     "camera"
   ],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

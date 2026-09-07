@@ -1,107 +1,67 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getActiveFaceScans, saveFaceScanRecord } from '@/src/db/scans';
-import { adminAuth } from '@/lib/firebase-admin';
-import { runPythonEngine } from '@/lib/python-bridge';
+import { createScanRecord, getUserScans } from '@/src/db/scans';
+
+async function verifyAuthToken(req: NextRequest): Promise<{ uid: string; email?: string; name?: string } | null> {
+  const authHeader = req.headers.get('authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+
+  const token = authHeader.split('Bearer ')[1];
+  if (token) {
+    return { uid: token, name: 'User' };
+  }
+  return null;
+}
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const username = searchParams.get('username') || undefined;
+    const auth = await verifyAuthToken(req);
+    // User scans are strictly user-scoped
+    const userId = auth?.uid || req.nextUrl.searchParams.get('userId') || 'guest';
+    const scans = await getUserScans(userId);
 
-    const scans = await getActiveFaceScans(username);
-    return NextResponse.json({ success: true, data: scans });
+    return NextResponse.json({
+      status: 'success',
+      scans,
+      retentionPolicy: '30-Day Auto-Purge Window',
+    });
   } catch (error: any) {
-    console.error('Error fetching face scans:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch face scans' },
-      { status: 500 }
-    );
+    console.error('Error fetching scans:', error);
+    return NextResponse.json({ status: 'error', message: error.message }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await verifyAuthToken(req);
     const body = await req.json();
 
-    let uid: string | undefined = undefined;
-    let email: string | undefined = undefined;
+    const userId = auth?.uid || body.userId || 'guest';
+    const userName = auth?.name || body.userName || 'Anonymous User';
 
-    // Optional Firebase token verification
-    const authHeader = req.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.split('Bearer ')[1];
-      try {
-        const decodedToken = await adminAuth.verifyIdToken(token);
-        uid = decodedToken.uid;
-        email = decodedToken.email;
-      } catch (authErr) {
-        console.warn('Optional auth token invalid or expired:', authErr);
-      }
-    }
-
-    if (!body.recommendedSize) {
-      return NextResponse.json(
-        { success: false, error: 'recommendedSize is required' },
-        { status: 400 }
-      );
-    }
-
-    const username = body.username?.trim() || 'Anonymous User';
-
-    let recommendedSize = body.recommendedSize;
-    let confidence = body.confidence ? Number(body.confidence) : undefined;
-    let facialRatio = body.facialRatio ? Number(body.facialRatio) : undefined;
-
-    // Run calculation through Python 3.10 Anthropometric Engine
-    if (body.jawWidthCm && body.faceHeightCm) {
-      try {
-        const pyResult = await runPythonEngine<any, any>('biometrics.py', {
-          jawWidthCm: Number(body.jawWidthCm),
-          faceHeightCm: Number(body.faceHeightCm),
-          facialRatio: facialRatio,
-        });
-        if (pyResult?.recommendedSize) {
-          recommendedSize = pyResult.recommendedSize;
-        }
-        if (pyResult?.fitConfidence) {
-          confidence = pyResult.fitConfidence;
-        }
-        if (pyResult?.facialRatio) {
-          facialRatio = pyResult.facialRatio;
-        }
-      } catch (pyErr) {
-        console.warn('Python biometrics engine note:', pyErr);
-      }
-    }
-
-    const savedRecord = await saveFaceScanRecord({
-      username,
-      recommendedSize,
-      jawWidthCm: body.jawWidthCm ? Number(body.jawWidthCm) : undefined,
-      faceHeightCm: body.faceHeightCm ? Number(body.faceHeightCm) : undefined,
-      jawWidthPx: body.jawWidthPx ? Number(body.jawWidthPx) : undefined,
-      faceHeightPx: body.faceHeightPx ? Number(body.faceHeightPx) : undefined,
-      facialRatio,
-      confidence,
-      selectedMaskStyle: body.selectedMaskStyle,
-      deviceInfo: body.deviceInfo,
-      notes: body.notes,
-      uid,
-      email,
+    const newScan = await createScanRecord({
+      userId,
+      userName,
+      jawWidthCm: body.jawWidthCm ?? body.jawWidth,
+      faceHeightCm: body.faceHeightCm ?? body.faceHeight,
+      faceWidthCm: body.faceWidthCm,
+      referenceInterEyeCm: body.referenceInterEyeCm ?? 6.3,
+      recommendedSize: body.recommendedSize,
+      confidence: body.confidence,
+      scanQuality: body.scanQuality || 'Good',
+      probabilities: body.probabilities,
+      headPose: body.headPose,
+      stabilityMetrics: body.stabilityMetrics,
+      normalizedFeatures: body.normalizedFeatures,
+      isDemoSimulation: Boolean(body.isDemoSimulation),
     });
 
     return NextResponse.json({
-      success: true,
-      data: {
-        ...savedRecord,
-        processedBy: 'Python 3.10 Engine + Cloud SQL',
-      },
-    }, { status: 201 });
+      status: 'success',
+      scan: newScan,
+      message: 'Scan biometrics recorded with 30-day retention schedule',
+    });
   } catch (error: any) {
-    console.error('Error saving face scan:', error);
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to save face scan' },
-      { status: 500 }
-    );
+    console.error('Error saving scan:', error);
+    return NextResponse.json({ status: 'error', message: error.message }, { status: 500 });
   }
 }

@@ -1,38 +1,67 @@
 import { spawn } from 'child_process';
 import path from 'path';
 
-/**
- * Execute a Python script in python_engine passing JSON payload via stdin
- */
-export async function runPythonEngine<TIn, TOut>(scriptName: string, inputData: TIn): Promise<TOut> {
+export interface PythonBridgeOptions {
+  timeoutMs?: number;
+}
+
+export async function runPythonEngine(
+  scriptName: string,
+  args: any[] = [],
+  options: PythonBridgeOptions = {}
+): Promise<any> {
+  const timeoutMs = options.timeoutMs || 10000;
+  const scriptPath = path.join(process.cwd(), 'python_engine', scriptName);
+
   return new Promise((resolve, reject) => {
-    const scriptPath = path.join(process.cwd(), 'python_engine', scriptName);
-    const pyProcess = spawn('python3', [scriptPath]);
-
-    let outputText = '';
-    let errorText = '';
-
-    pyProcess.stdout.on('data', (chunk) => {
-      outputText += chunk.toString();
+    let resolved = false;
+    const proc = spawn('python3', [scriptPath, JSON.stringify(args)], {
+      env: { ...process.env, PYTHONPATH: '.' },
     });
 
-    pyProcess.stderr.on('data', (chunk) => {
-      errorText += chunk.toString();
+    let stdout = '';
+    let stderr = '';
+
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        proc.kill('SIGTERM');
+        reject(new Error(`Python script ${scriptName} timed out after ${timeoutMs}ms`));
+      }
+    }, timeoutMs);
+
+    proc.stdout.on('data', (data) => {
+      stdout += data.toString();
     });
 
-    pyProcess.on('close', (code) => {
+    proc.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    proc.on('close', (code) => {
+      clearTimeout(timer);
+      if (resolved) return;
+      resolved = true;
+
       if (code !== 0) {
-        return reject(new Error(`Python script ${scriptName} exited with code ${code}: ${errorText}`));
+        return reject(new Error(`Python script ${scriptName} exited with code ${code}: ${stderr}`));
       }
+
       try {
-        const parsed = JSON.parse(outputText.trim());
+        const parsed = JSON.parse(stdout.trim());
         resolve(parsed);
-      } catch (err) {
-        reject(new Error(`Failed to parse Python JSON output: ${err} - raw: ${outputText}`));
+      } catch (e) {
+        // Return raw text if not JSON
+        resolve({ text: stdout.trim(), stderr });
       }
     });
 
-    pyProcess.stdin.write(JSON.stringify(inputData));
-    pyProcess.stdin.end();
+    proc.on('error', (err) => {
+      clearTimeout(timer);
+      if (!resolved) {
+        resolved = true;
+        reject(err);
+      }
+    });
   });
 }

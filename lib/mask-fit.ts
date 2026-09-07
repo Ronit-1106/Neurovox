@@ -1,18 +1,36 @@
-export interface FaceMeasurements {
-  width: number; // in pixels
-  height: number; // in pixels
-  ratio: number; // width / height
-  estimatedWidthCm: number; // approximated real-world width in cm
-  estimatedHeightCm: number; // approximated real-world height in cm
-  confidence: number;
-}
+/**
+ * Neurovox Protective Mask Fitting & Biometric Specifications
+ * Anthropometric reference dimensions, sizing brackets, and product catalog.
+ */
 
 export type MaskSize = 'Small' | 'Medium' | 'Large';
 
-export interface MaskColorOption {
-  name: string;
-  hex: string;
-  accentClass: string;
+export interface FaceMeasurements {
+  /** Estimated jaw span in cm based on calibrated reference distance */
+  jawWidth: number;
+  /** Estimated face height (nasion to menton) in cm */
+  faceHeight: number;
+  /** Estimated bizygomatic cheek width in cm */
+  faceWidth?: number;
+  /** Estimated chin-to-mouth distance in cm */
+  chinToNose?: number;
+  /** Calibrated reference distance used for scale normalization */
+  referenceInterEyeDistanceCm: number;
+  /** Scale-invariant facial ratio (jaw width / face height) */
+  facialRatio?: number;
+}
+
+export interface ModelPrediction {
+  predictedSize: MaskSize;
+  confidence: number; // 0.0 to 1.0 (winning softmax probability)
+  probabilities: {
+    Small: number;
+    Medium: number;
+    Large: number;
+  };
+  scanQuality: 'Excellent' | 'Good' | 'Fair' | 'Poor';
+  coefficientOfVariation: number; // Stability metric across captured frames
+  isDemoSimulation?: boolean;
 }
 
 export interface MaskStyle {
@@ -20,217 +38,126 @@ export interface MaskStyle {
   name: string;
   tagline: string;
   description: string;
-  price: string;
-  priceNumeric: number;
-  sealScore: string;
-  material: string;
-  rating: number;
-  reviewCount: number;
-  features: string[];
-  colors: MaskColorOption[];
+  priceInr: number; // In Indian Rupees (₹)
+  priceFormatted: string;
+  filtrationEfficiency: string;
+  breathabilityIndex: string;
+  idealFor: string;
+  colors: {
+    name: string;
+    hex: string;
+    bgClass: string;
+  }[];
+  specifications: {
+    filterType: string;
+    sealMaterial: string;
+    strapType: string;
+    lifespan: string;
+    certification: string;
+  };
 }
 
 export const MASK_STYLES: MaskStyle[] = [
   {
-    id: 'everyday',
-    name: 'Everyday Comfort Mask',
-    tagline: 'Ultra-soft 3-layer organic modal weave',
-    description: 'Designed for daily errands, transit, and office wear with zero ear-strain and soft adjustable loops.',
-    price: '₹499',
-    priceNumeric: 499,
-    sealScore: '96.8%',
-    material: 'Organic Modal & Breathable Cotton',
-    rating: 4.9,
-    reviewCount: 1420,
-    features: [
-      '3-Layer Hypoallergenic Modal Blend',
-      'Ergonomic memory-flex nose strip',
-      'Ultra-soft padded ear loops',
-      'Washable & reusable up to 60 washes'
-    ],
+    id: 'aeroshield-pro',
+    name: 'AeroShield Pro',
+    tagline: 'Precision Seal & N99 Multi-Stage Filtration',
+    description: 'Engineered for dense urban environments and industrial air quality. Dual exhalation micro-valves with medical-grade silicone ergonomic seal.',
+    priceInr: 1999,
+    priceFormatted: '₹1,999',
+    filtrationEfficiency: '99.4% PM0.1 Particles',
+    breathabilityIndex: '28 Pa/cm² Air Resistance',
+    idealFor: 'Urban Commuting, Heavy Smog, Dusty Transit',
     colors: [
-      { name: 'Sage Green', hex: '#8A9A5B', accentClass: 'bg-[#8A9A5B]' },
-      { name: 'Midnight Black', hex: '#1C1E1B', accentClass: 'bg-[#1C1E1B]' },
-      { name: 'Desert Sand', hex: '#D2C5B0', accentClass: 'bg-[#D2C5B0]' },
-      { name: 'Dusty Rose', hex: '#C4989E', accentClass: 'bg-[#C4989E]' },
-      { name: 'Navy Blue', hex: '#263445', accentClass: 'bg-[#263445]' }
-    ]
+      { name: 'Obsidian Black', hex: '#1C1D18', bgClass: 'bg-[#1C1D18]' },
+      { name: 'Sage Green', hex: '#63704D', bgClass: 'bg-[#63704D]' },
+      { name: 'Titanium Gray', hex: '#7D8471', bgClass: 'bg-[#7D8471]' },
+      { name: 'Warm Cream', hex: '#EAE6D9', bgClass: 'bg-[#EAE6D9]' },
+    ],
+    specifications: {
+      filterType: 'Electrostatic Melt-blown 5-Layer Composite',
+      sealMaterial: 'Skin-Contact Biocompatible Silicone',
+      strapType: 'Dual Adjustable Elastic Crown + Nape Straps',
+      lifespan: 'Reusable shell, 120-hour replaceable filter',
+      certification: 'EN 149:2001 + A1:2009 FFP3 Standard',
+    },
   },
   {
-    id: 'sport',
-    name: 'Active Sport Pro',
-    tagline: 'High-airflow moisture-dispersion mesh',
-    description: 'Contours snugly around the jawline during cardio, running, and high-movement sessions with zero slippage.',
-    price: '₹799',
-    priceNumeric: 799,
-    sealScore: '98.5%',
-    material: 'Poly-Mesh Airflow with Ergonomic Seal',
-    rating: 4.8,
-    reviewCount: 980,
-    features: [
-      'Dual active exhale micromesh channels',
-      'Anti-fog aerodynamic nose seal',
-      'Sweat-wicking antimicrobial liner',
-      'Dual rear-head comfort strap system'
-    ],
+    id: 'urbanbreathe-minimal',
+    name: 'UrbanBreathe Minimal',
+    tagline: 'Ultralight Daily Protection with Low Breathing Resistance',
+    description: 'Streamlined aesthetic silhouette crafted for everyday city use. Ultra-thin profile with shape-memory bridge for spectacles wearers.',
+    priceInr: 1499,
+    priceFormatted: '₹1,499',
+    filtrationEfficiency: '98.2% PM2.5 / Bacteria',
+    breathabilityIndex: '22 Pa/cm² Low Resistance',
+    idealFor: 'Daily Office, Light Walking, Public Transport',
     colors: [
-      { name: 'Carbon Black', hex: '#18181B', accentClass: 'bg-[#18181B]' },
-      { name: 'Electric Lime', hex: '#84CC16', accentClass: 'bg-[#84CC16]' },
-      { name: 'Slate Grey', hex: '#64748B', accentClass: 'bg-[#64748B]' },
-      { name: 'Cobalt Blue', hex: '#2563EB', accentClass: 'bg-[#2563EB]' },
-      { name: 'Solar Orange', hex: '#EA580C', accentClass: 'bg-[#EA580C]' }
-    ]
+      { name: 'Matte Charcoal', hex: '#2A2B23', bgClass: 'bg-[#2A2B23]' },
+      { name: 'Olive Drab', hex: '#4B5238', bgClass: 'bg-[#4B5238]' },
+      { name: 'Desert Sand', hex: '#D6CEBE', bgClass: 'bg-[#D6CEBE]' },
+    ],
+    specifications: {
+      filterType: 'Nanofiber High-Porosity Sub-Micron Layer',
+      sealMaterial: 'Memory Foam Contour Cushion',
+      strapType: 'Soft Knitted Ear-loops with Silicone Stopper',
+      lifespan: 'Washable fabric shell, 80-hour filter cartridge',
+      certification: 'KN95 / GB2626-2019 Compliant',
+    },
   },
   {
-    id: 'shield',
-    name: 'N95 Shield Plus',
-    tagline: 'Medical-grade 5-layer particulate barrier',
-    description: 'Maximum biological filtration efficiency with reinforced memory nose bridge clamp and certified particulate seal.',
-    price: '₹999',
-    priceNumeric: 999,
-    sealScore: '99.4%',
-    material: '5-Ply Meltblown Nanofiber',
-    rating: 4.95,
-    reviewCount: 2310,
-    features: [
-      '99.4% Particulate Filtration Efficiency (PFE)',
-      'Contoured 3D cup shape with breathing chamber',
-      'Silicone airtight jawline edge gasket',
-      'Adjustable dual headbands for medical-grade seal'
-    ],
+    id: 'apexsport-active',
+    name: 'ApexSport Active',
+    tagline: 'Maximum Aerodynamic Airflow for Training & Cycling',
+    description: 'High-performance athletic mask with panoramic dual-flow directional exhaust ports to prevent heat and moisture accumulation during exertion.',
+    priceInr: 2299,
+    priceFormatted: '₹2,299',
+    filtrationEfficiency: '97.5% Dust & Particulate Ingress',
+    breathabilityIndex: '18 Pa/cm² Ultra-Low Pressure Drop',
+    idealFor: 'Running, Cycling, Outdoor High-Intensity Sports',
     colors: [
-      { name: 'Crisp White', hex: '#F8FAFC', accentClass: 'bg-[#F8FAFC]' },
-      { name: 'Medical Blue', hex: '#0284C7', accentClass: 'bg-[#0284C7]' },
-      { name: 'Charcoal Black', hex: '#27272A', accentClass: 'bg-[#27272A]' },
-      { name: 'Olive Green', hex: '#4B5320', accentClass: 'bg-[#4B5320]' }
-    ]
-  }
+      { name: 'Midnight Stealth', hex: '#151610', bgClass: 'bg-[#151610]' },
+      { name: 'High-Vis Amber', hex: '#C28432', bgClass: 'bg-[#C28432]' },
+      { name: 'Slate Teal', hex: '#3B5953', bgClass: 'bg-[#3B5953]' },
+    ],
+    specifications: {
+      filterType: 'Active Dynamic Flow Spunbond Cartridge',
+      sealMaterial: 'Perforated Ergonomic Neoprene Blend',
+      strapType: 'Quick-Release Magnetic Rear Hook Lock',
+      lifespan: 'Water-resistant washable chassis, swappable filters',
+      certification: 'ASTM F3502-21 Barrier Face Covering',
+    },
+  },
 ];
 
-// Key facial landmarks for mask fitment:
-// 234: Left pre-auricular / jaw curve
-// 454: Right pre-auricular / jaw curve
-// 152: Menton / chin bottom
-// 168: Glabella / nasion (bridge of nose)
-// 50: Left cheek / upper mask contact
-// 280: Right cheek / upper mask contact
-// 4: Nose tip
-// 33, 133: Left eye outer and inner corners (used for pupil center calculation)
-// 263, 362: Right eye outer and inner corners (used for pupil center calculation)
-export const KEY_LANDMARK_INDICES = [234, 454, 152, 50, 280, 168];
-
-export interface SizeOptionDetails {
+export interface MaskDimensionGuideline {
   size: MaskSize;
-  name: string;
-  badge: string;
-  widthRange: string;
-  heightRange: string;
-  description: string;
-  recommendedFor: string;
+  label: string;
+  recommendedJawSpan: string;
+  recommendedFaceHeight: string;
+  notes: string;
 }
 
-export const MASK_SIZE_OPTIONS: SizeOptionDetails[] = [
-  {
+export const MASK_SIZE_GUIDELINES: Record<MaskSize, MaskDimensionGuideline> = {
+  Small: {
     size: 'Small',
-    name: 'Size S (Petite / Slim)',
-    badge: 'Petite Fit',
-    widthRange: '< 12.2 cm',
-    heightRange: '< 11.2 cm',
-    description: 'Narrower jawline and compact cheek span with tailored contouring.',
-    recommendedFor: 'Slender faces, adolescents, or those preferring a very snug seal.'
+    label: 'Small (Petite)',
+    recommendedJawSpan: '10.5 – 12.2 cm',
+    recommendedFaceHeight: '9.5 – 11.2 cm',
+    notes: 'Suited for smaller facial structures and compact jaw contours to prevent perimeter leakages.',
   },
-  {
+  Medium: {
     size: 'Medium',
-    name: 'Size M (Standard Adult)',
-    badge: 'Universal Fit',
-    widthRange: '12.2 – 14.0 cm',
-    heightRange: '11.2 – 12.6 cm',
-    description: 'Optimal balance between nose bridge clamp and chin contour.',
-    recommendedFor: 'Over 75% of adult facial structures.'
+    label: 'Medium (Standard)',
+    recommendedJawSpan: '12.3 – 13.9 cm',
+    recommendedFaceHeight: '11.3 – 12.5 cm',
+    notes: 'Optimized for standard adult facial proportions with balanced vertical and lateral seal tension.',
   },
-  {
+  Large: {
     size: 'Large',
-    name: 'Size L (Broad / Extended)',
-    badge: 'Comfort Fit',
-    widthRange: '> 14.0 cm',
-    heightRange: '> 12.6 cm',
-    description: 'Expanded cheek span and deeper chin cup for broad structures.',
-    recommendedFor: 'Broader jawlines, fuller cheeks, or taller nose-to-chin spans.'
-  }
-];
-
-export function computeMaskSizeFromBiometrics(measurements: FaceMeasurements): MaskSize {
-  const { estimatedWidthCm, estimatedHeightCm } = measurements;
-
-  // Primary: Balanced Anthropometric Metric
-  if (estimatedWidthCm > 0 && estimatedHeightCm > 0) {
-    const compositeScore = estimatedWidthCm * 0.55 + estimatedHeightCm * 0.45;
-
-    // Small: petite facial structure
-    if (compositeScore < 11.9 || (estimatedWidthCm < 12.2 && estimatedHeightCm < 11.2)) {
-      return 'Small';
-    }
-    // Large: broad or taller facial structure
-    if (compositeScore > 13.4 || (estimatedWidthCm > 14.0 && estimatedHeightCm > 12.5)) {
-      return 'Large';
-    }
-    // Standard adult human fits Medium
-    return 'Medium';
-  }
-
-  // Fallback using single metric
-  if (estimatedWidthCm > 0) {
-    if (estimatedWidthCm < 12.2) return 'Small';
-    if (estimatedWidthCm > 14.0) return 'Large';
-    return 'Medium';
-  }
-
-  // Fallback to ratio
-  const ratio = measurements.ratio || 1.15;
-  if (ratio < 1.05) return 'Small';
-  if (ratio > 1.25) return 'Large';
-  return 'Medium';
-}
-
-export function generateSimulatedFaceMeasurements(targetSize?: MaskSize): FaceMeasurements {
-  let widthCm: number;
-  let heightCm: number;
-
-  if (targetSize === 'Small') {
-    widthCm = Number((11.4 + Math.random() * 0.6).toFixed(1));
-    heightCm = Number((10.5 + Math.random() * 0.5).toFixed(1));
-  } else if (targetSize === 'Large') {
-    widthCm = Number((14.3 + Math.random() * 0.7).toFixed(1));
-    heightCm = Number((12.8 + Math.random() * 0.6).toFixed(1));
-  } else if (targetSize === 'Medium') {
-    widthCm = Number((13.1 + Math.random() * 0.6).toFixed(1));
-    heightCm = Number((11.8 + Math.random() * 0.5).toFixed(1));
-  } else {
-    // Balanced realistic distribution: 25% Small, 55% Medium, 20% Large
-    const roll = Math.random();
-    if (roll < 0.25) {
-      widthCm = Number((11.5 + Math.random() * 0.6).toFixed(1));
-      heightCm = Number((10.5 + Math.random() * 0.5).toFixed(1));
-    } else if (roll < 0.80) {
-      widthCm = Number((13.0 + Math.random() * 0.7).toFixed(1));
-      heightCm = Number((11.8 + Math.random() * 0.5).toFixed(1));
-    } else {
-      widthCm = Number((14.2 + Math.random() * 0.7).toFixed(1));
-      heightCm = Number((12.8 + Math.random() * 0.6).toFixed(1));
-    }
-  }
-
-  const pxPerCm = 23;
-  const widthPx = Math.round(widthCm * pxPerCm);
-  const heightPx = Math.round(heightCm * pxPerCm);
-  const ratio = Number((widthPx / heightPx).toFixed(2));
-
-  return {
-    width: widthPx,
-    height: heightPx,
-    ratio,
-    estimatedWidthCm: widthCm,
-    estimatedHeightCm: heightCm,
-    confidence: 0.98
-  };
-}
+    label: 'Large (Extended)',
+    recommendedJawSpan: '14.0 – 16.5 cm',
+    recommendedFaceHeight: '12.6 – 14.8 cm',
+    notes: 'Designed for broader mandibular bone structures and elongated nasal-to-chin spans.',
+  },
+};

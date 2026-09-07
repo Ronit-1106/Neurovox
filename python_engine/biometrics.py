@@ -1,73 +1,45 @@
 #!/usr/bin/env python3
 """
-Neurovox Biometric Analysis Engine (Python)
-Performs anthropometric face contour calculation and mask size prediction.
+Neurovox Biometric Analysis Engine
+Coordinates facial landmark processing, normalized geometric extraction,
+and model inference for mask sizing.
+All references use calibrated inter-eye reference distance.
 """
 import sys
 import json
-from datetime import datetime, timedelta
+from python_engine.feature_extractor import extract_normalized_features
+from python_engine.inference import run_inference
 
-def calculate_mask_size(jaw_width_cm, face_height_cm, facial_ratio=None):
+def analyze_landmarks(landmarks_map):
     """
-    Predict mask size using facial anthropometric thresholds.
-    Standard adult dimensions:
-    - Small:  Composite score < 11.9 cm OR (Jaw width < 12.2 cm AND Face height < 11.2 cm)
-    - Medium: Universal adult contour (Jaw width 12.2 - 14.0 cm, Face height 11.2 - 12.6 cm)
-    - Large:  Composite score > 13.4 cm OR (Jaw width > 14.0 cm AND Face height > 12.5 cm)
+    Analyzes raw landmark points.
+    1. Extracts normalized geometric features and head pose.
+    2. Runs model inference.
+    3. Returns consolidated sizing recommendation and metrics.
     """
-    if facial_ratio is None:
-        facial_ratio = round(jaw_width_cm / max(face_height_cm, 0.1), 2)
-
-    composite_score = (jaw_width_cm * 0.55) + (face_height_cm * 0.45)
-
-    if composite_score < 11.9 or (jaw_width_cm < 12.2 and face_height_cm < 11.2):
-        recommended_size = "Small"
-        fit_confidence = 0.96
-        description = "Petite / Slim facial structure with narrower cheekbone span."
-    elif composite_score > 13.4 or (jaw_width_cm > 14.0 and face_height_cm > 12.5):
-        recommended_size = "Large"
-        fit_confidence = 0.97
-        description = "Broad facial structure requiring extended seal and jawline coverage."
-    else:
-        recommended_size = "Medium"
-        fit_confidence = 0.98
-        description = "Standard universal facial contours with balanced nose-to-chin proportions."
-
-    now = datetime.utcnow()
-    expires_at = now + timedelta(days=30)
+    extracted = extract_normalized_features(landmarks_map)
+    feature_vector = extracted["featureVector"]
+    inference_result = run_inference(feature_vector)
 
     return {
-        "recommendedSize": recommended_size,
-        "fitConfidence": fit_confidence,
-        "jawWidthCm": round(jaw_width_cm, 1),
-        "faceHeightCm": round(face_height_cm, 1),
-        "facialRatio": facial_ratio,
-        "description": description,
-        "processedBy": "Python 3.10 Anthropometric Engine",
-        "timestamp": int(now.timestamp() * 1000),
-        "expiresAt": int(expires_at.timestamp() * 1000),
-        "isoExpiration": expires_at.isoformat() + "Z"
+        "status": "success",
+        "predictedSize": inference_result["predictedSize"],
+        "confidence": inference_result["confidence"],
+        "probabilities": inference_result["probabilities"],
+        "headPose": extracted["headPose"],
+        "estimatedMeasurements": extracted["estimatedMeasurements"],
+        "normalizedFeatures": extracted["featureDict"],
     }
 
-def main():
+if __name__ == "__main__":
     try:
-        raw_input = sys.stdin.read().strip()
-        if not raw_input:
-            print(json.dumps({"error": "No input received"}), file=sys.stderr)
-            sys.exit(1)
-
-        payload = json.loads(raw_input)
-        jaw_width = float(payload.get("jawWidthCm", 12.8))
-        face_height = float(payload.get("faceHeightCm", 12.2))
-        facial_ratio = payload.get("facialRatio")
-        if facial_ratio is not None:
-            facial_ratio = float(facial_ratio)
-
-        result = calculate_mask_size(jaw_width, face_height, facial_ratio)
+        raw_args = sys.argv[1] if len(sys.argv) > 1 else "[]"
+        args = json.loads(raw_args)
+        landmarks = args[0] if len(args) > 0 else {}
+        # Convert string keys to int if necessary
+        landmarks_map = {int(k): v for k, v in landmarks.items()} if isinstance(landmarks, dict) else {}
+        result = analyze_landmarks(landmarks_map)
         print(json.dumps(result))
     except Exception as e:
-        print(json.dumps({"error": str(e)}), file=sys.stderr)
+        print(json.dumps({"status": "error", "message": str(e)}))
         sys.exit(1)
-
-if __name__ == "__main__":
-    main()

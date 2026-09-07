@@ -1,0 +1,17 @@
+{
+  "num_participants": 100,
+  "train_participants": 70,
+  "val_participants": 15,
+  "test_participants": 15,
+  "train_samples": 1050,
+  "val_samples": 225,
+  "test_samples": 225,
+  "total_samples": 1500,
+  "feature_count": 16,
+  "classes": [
+    "Small",
+    "Medium",
+    "Large"
+  ],
+  "partition_strategy": "Strict participant-level isolation (zero inter-set subject overlap)"
+}

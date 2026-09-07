@@ -1,27 +1,39 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { deleteFaceScanRecord } from '@/src/db/scans';
+import { deleteScanRecord } from '@/src/db/scans';
 
 export async function DELETE(
-  _req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
-    const numId = parseInt(id, 10);
-    if (isNaN(numId)) {
+    const { id } = await context.params;
+    const authHeader = req.headers.get('authorization');
+
+    let userId = req.nextUrl.searchParams.get('userId') || 'guest';
+
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split('Bearer ')[1];
+      if (token) {
+        userId = token;
+      }
+    }
+
+    const success = await deleteScanRecord(id, userId);
+
+    if (!success) {
       return NextResponse.json(
-        { success: false, error: 'Invalid scan ID' },
-        { status: 400 }
+        { error: 'Scan not found or unauthorized to delete this record' },
+        { status: 403 }
       );
     }
 
-    const success = await deleteFaceScanRecord(numId);
-    return NextResponse.json({ success });
+    return NextResponse.json({
+      status: 'success',
+      message: 'Scan record deleted permanently',
+    });
   } catch (error: any) {
     console.error('Error deleting scan:', error);
-    return NextResponse.json(
-      { success: false, error: error?.message || 'Failed to delete scan' },
-      { status: 500 }
-    );
+    return NextResponse.json({ status: 'error', message: error.message }, { status: 500 });
   }
 }
+
